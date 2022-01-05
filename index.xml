@@ -1,0 +1,9 @@
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title>👨‍💻꿈꾸는 태태태의 공간</title>
+        <link>https://jaeyeonme.github.io/</link>
+        <description>👨‍💻꿈꾸는 태태태의 공간</description>
+        <generator>Hugo -- gohugo.io</generator><language>en</language>
+            <atom:link href="https://jaeyeonme.github.io/index.xml" rel="self" type="application/rss+xml" />
+        </channel>
+</rss>
