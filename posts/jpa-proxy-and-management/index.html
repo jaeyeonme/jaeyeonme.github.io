@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>프록시와 연관관계 관리 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="프록시와 연관관계 관리" />
+<meta property="og:description" content="1. 프록시   프록시란?
+ 테이블을 조회해서 객체를 가져올 때 연관관계 객체는 안가져 오고 싶으면 어떻게 해야 할까?
+  em.find() : 데이터베이스를 통해서 실제 엔티티 객체 조회
+  em.getReference(): 데이터베이스 조회를 미루는 가짜(프록시) 엔티티 객체 조회
+Member member = em.getReference(Member.class, 1L); System.out.println(&#34;member = &#34; &#43; member.getClass()); // HibernateProxy 객체 getReference() 메서드를 사용하면 진짜 객체가 아닌 하이버네이트 내부 로직으로 프록시 엔티티 객체 반환
+내부 구조는 틀은 같지만 내용이 비어있다.
+프록시 객체를 반환한다.&#34; 프록시 객체를 반환한다.    특징
+  실제 클래스를상속받아서 만들어짐
+  실제 클래스와 겉 모양이 같다.
+  사용하는 입장에서는 진짜 객체인지 구분 필요가 없다. (이론적으로)
+  프록시 객체는 실제 객체의 참조(target)를 보관한다.
+  프록시 객체를 호출(getName())하면 프록시 객체는 실제 객체의 메소드 호출
+  프록시는 처음 사용할 때 한 번만 초기화
+  프록시 객체를 초기화 할 때 프록시 객체가 실제 엔티티로 바뀌는 것은 아님, 초기화되면 프록시 객체를 통해 실제 엔티티에 접근 가능
+  프록시 객체는 원본 엔티티를 상속받음, 따라서 타입 체크시 주의해야함( == 비교 실패, 대신 instance of 사용)
+m1.getClass() == m2.getClass() //false m1 instanceof Member m2 instanceof Member     영속성 컨텍스트에 찾는 엔티티가 이미 있으면 em.getReference()를 호출해도 실제 엔티티 반환
+Member m1 = em.find(Member.class, member1.getId()); System.out.println(&#34;m1 = &#34;&#43; m1.getClass());//Member  Member reference = em.getReference(Member.class, member1.getId()); System.out.println(&#34;reference = &#34; reference.getClass()); //Member  m1 == reference //true 이미 Member를 1차 캐시에도 올라와 있는데, 프록시를 반환할 필요가 없다.
+    반대로 getReference()로 프록시객체를 가지고 있으면 실제로 find()를 했을때도 프록시 객체를 반환함
+  영속성 컨텍스트의 도움을 받을 수 없는 준영속 상태일 때, 프록시를 초기화하면 문제 발생
+Member refMember = em.getReference(Member.class, member.getId()); System.out.println(&#34;refMember = &#34;&#43; refMember.getClass());//Proxy  em.detach(refMember); //em.clear  refMember.getUsername(); //org.hibernate.LazyInitializationException   프록시 객체의 초기화
+Member member = em.getRefernce(Member.class, &#34;id1&#34;);//(1) member.getName();//(2) 코드 1라인에서 getReference()를 호출하면 프록시객체를 가져온 다음, getName()을 호출하면
+JPA가 영속성 컨텍스트에 초기화 요청을 한다.
+영속성 컨텍스트에서는 실제 DB를 조회해서 가져온 다음 실제 Entity에 값을 넣어 생성한 다음 프록시 객체는
+실제 엔티티를 연결해서 실제 엔티티를 반환한다.
+그 이후에는 이미 초기화되어있는 프록시객체 여기에 해당 엔티티를 반환한다.
+프록시 확인
+ 프록시 인스턴스의 초기화 여부 확인 : PersistenceUnitUtil.isLoaded(Object entity) → entityManagerFactory.getPersistenceUnitUtil().isLoaded(object) 프록시 클래스 확인 방법 : entity.getClass().getname() 출력(..javasist.. or HibernateProxy&hellip;) 프록시 강제 초기화 : org.hibernate.Hibernate.initialize(entity); 참고: JPA 표준은 강제 초기화 없음 강제호출 : method.getName();  2. 즉시로딩과 지연로딩  지연 로딩 Member를 조회할 때 Team(연관관계)도 함께 조회해야 할까? : 단순히 member 정보만사용하는 비즈니스 로직
+지연 로딩 LAZY을 사용해서 프록시로 조회
+fetch = FetchType.LAZY
+/*Member*/ @Entity public class Member { ... @ManyToOne(fetch = FetchType.LAZY) //지연로딩 사용  @JoinColumn(name=&#34;TEAM_ID&#34;) private Team team; ... } ... Member m = em.find(Member.class, member1.getId()); // Member 객체 반환 System.out.println(&#34;m = &#34;&#43; m.getTeam().getClass()); // Team$HibernateProxy객체 반환 m.getTeam().getName() // team을 실제로 사용하는 시점에서 db조회 엔티티 반환 ... 연관관계에 있는 다른 엔티티를 사용하는 빈도수가 낮을 경우 지연로딩을 사용해 불필요한 엔티티 조회를 막을 수 있다.
+즉시 로딩 ❓Member와 Team을 같이 쓰는 빈도가 높을 경우에는 어떻게 해야 할까?
+즉시 로딩 EAGER를 사용해서 함꼐 조회 fetch = FetchType.EAGER
+/*Member*/ @Entity public class Member{ ... @ManyToOne(fetch = FetchType.EAGER) //즉시로딩 사용  @JoinColumn(name=&#34;TEAM_ID&#34;) private Team team; ... } ... Member m = em." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/jpa-proxy-and-management/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-29T13:40:00+00:00" />
+<meta property="article:modified_time" content="2021-12-29T13:40:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="프록시와 연관관계 관리"/>
+<meta name="twitter:description" content="1. 프록시   프록시란?
+ 테이블을 조회해서 객체를 가져올 때 연관관계 객체는 안가져 오고 싶으면 어떻게 해야 할까?
+  em.find() : 데이터베이스를 통해서 실제 엔티티 객체 조회
+  em.getReference(): 데이터베이스 조회를 미루는 가짜(프록시) 엔티티 객체 조회
+Member member = em.getReference(Member.class, 1L); System.out.println(&#34;member = &#34; &#43; member.getClass()); // HibernateProxy 객체 getReference() 메서드를 사용하면 진짜 객체가 아닌 하이버네이트 내부 로직으로 프록시 엔티티 객체 반환
+내부 구조는 틀은 같지만 내용이 비어있다.
+프록시 객체를 반환한다.&#34; 프록시 객체를 반환한다.    특징
+  실제 클래스를상속받아서 만들어짐
+  실제 클래스와 겉 모양이 같다.
+  사용하는 입장에서는 진짜 객체인지 구분 필요가 없다. (이론적으로)
+  프록시 객체는 실제 객체의 참조(target)를 보관한다.
+  프록시 객체를 호출(getName())하면 프록시 객체는 실제 객체의 메소드 호출
+  프록시는 처음 사용할 때 한 번만 초기화
+  프록시 객체를 초기화 할 때 프록시 객체가 실제 엔티티로 바뀌는 것은 아님, 초기화되면 프록시 객체를 통해 실제 엔티티에 접근 가능
+  프록시 객체는 원본 엔티티를 상속받음, 따라서 타입 체크시 주의해야함( == 비교 실패, 대신 instance of 사용)
+m1.getClass() == m2.getClass() //false m1 instanceof Member m2 instanceof Member     영속성 컨텍스트에 찾는 엔티티가 이미 있으면 em.getReference()를 호출해도 실제 엔티티 반환
+Member m1 = em.find(Member.class, member1.getId()); System.out.println(&#34;m1 = &#34;&#43; m1.getClass());//Member  Member reference = em.getReference(Member.class, member1.getId()); System.out.println(&#34;reference = &#34; reference.getClass()); //Member  m1 == reference //true 이미 Member를 1차 캐시에도 올라와 있는데, 프록시를 반환할 필요가 없다.
+    반대로 getReference()로 프록시객체를 가지고 있으면 실제로 find()를 했을때도 프록시 객체를 반환함
+  영속성 컨텍스트의 도움을 받을 수 없는 준영속 상태일 때, 프록시를 초기화하면 문제 발생
+Member refMember = em.getReference(Member.class, member.getId()); System.out.println(&#34;refMember = &#34;&#43; refMember.getClass());//Proxy  em.detach(refMember); //em.clear  refMember.getUsername(); //org.hibernate.LazyInitializationException   프록시 객체의 초기화
+Member member = em.getRefernce(Member.class, &#34;id1&#34;);//(1) member.getName();//(2) 코드 1라인에서 getReference()를 호출하면 프록시객체를 가져온 다음, getName()을 호출하면
+JPA가 영속성 컨텍스트에 초기화 요청을 한다.
+영속성 컨텍스트에서는 실제 DB를 조회해서 가져온 다음 실제 Entity에 값을 넣어 생성한 다음 프록시 객체는
+실제 엔티티를 연결해서 실제 엔티티를 반환한다.
+그 이후에는 이미 초기화되어있는 프록시객체 여기에 해당 엔티티를 반환한다.
+프록시 확인
+ 프록시 인스턴스의 초기화 여부 확인 : PersistenceUnitUtil.isLoaded(Object entity) → entityManagerFactory.getPersistenceUnitUtil().isLoaded(object) 프록시 클래스 확인 방법 : entity.getClass().getname() 출력(..javasist.. or HibernateProxy&hellip;) 프록시 강제 초기화 : org.hibernate.Hibernate.initialize(entity); 참고: JPA 표준은 강제 초기화 없음 강제호출 : method.getName();  2. 즉시로딩과 지연로딩  지연 로딩 Member를 조회할 때 Team(연관관계)도 함께 조회해야 할까? : 단순히 member 정보만사용하는 비즈니스 로직
+지연 로딩 LAZY을 사용해서 프록시로 조회
+fetch = FetchType.LAZY
+/*Member*/ @Entity public class Member { ... @ManyToOne(fetch = FetchType.LAZY) //지연로딩 사용  @JoinColumn(name=&#34;TEAM_ID&#34;) private Team team; ... } ... Member m = em.find(Member.class, member1.getId()); // Member 객체 반환 System.out.println(&#34;m = &#34;&#43; m.getTeam().getClass()); // Team$HibernateProxy객체 반환 m.getTeam().getName() // team을 실제로 사용하는 시점에서 db조회 엔티티 반환 ... 연관관계에 있는 다른 엔티티를 사용하는 빈도수가 낮을 경우 지연로딩을 사용해 불필요한 엔티티 조회를 막을 수 있다.
+즉시 로딩 ❓Member와 Team을 같이 쓰는 빈도가 높을 경우에는 어떻게 해야 할까?
+즉시 로딩 EAGER를 사용해서 함꼐 조회 fetch = FetchType.EAGER
+/*Member*/ @Entity public class Member{ ... @ManyToOne(fetch = FetchType.EAGER) //즉시로딩 사용  @JoinColumn(name=&#34;TEAM_ID&#34;) private Team team; ... } ... Member m = em."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/jpa-proxy-and-management/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/jpa-advanced-mapping/" /><link rel="next" href="https://jaeyeonme.github.io/posts/jpa-value-type/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "프록시와 연관관계 관리",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/jpa-proxy-and-management\/"
+        },"genre": "posts","keywords": "JPA, Hibernate","wordcount":  1262 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/jpa-proxy-and-management\/","datePublished": "2021-12-29T13:40:00+00:00","dateModified": "2021-12-29T13:40:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">프록시와 연관관계 관리</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-29">2021-12-29</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;1262 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;6 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-프록시">1. 프록시</a></li>
+    <li><a href="#2-즉시로딩과-지연로딩">2. 즉시로딩과 지연로딩</a>
+      <ul>
+        <li><a href="#지연-로딩">지연 로딩</a></li>
+        <li><a href="#즉시-로딩">즉시 로딩</a></li>
+        <li><a href="#프록시와-즉시로딩-주의">프록시와 즉시로딩 주의</a></li>
+        <li><a href="#n1의-해결책">N+1의 해결책</a></li>
+        <li><a href="#지연-로딩-활용">지연 로딩 활용</a></li>
+        <li><a href="#지연-로딩-활용---실무">지연 로딩 활용 - 실무</a></li>
+      </ul>
+    </li>
+    <li><a href="#3-영속성-전이-cascad와-고아-객체">3. 영속성 전이 (CASCAD)와 고아 객체</a>
+      <ul>
+        <li><a href="#영속성-전이cascade는-언제-써야-할까">영속성 전이(CASCADE)는 언제 써야 할까?</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-프록시">1. 프록시</h2>
+<hr>
+<blockquote>
+<p>프록시란?</p>
+</blockquote>
+<p>테이블을 조회해서 객체를 가져올 때 연관관계 객체는 안가져 오고 싶으면 어떻게 해야 할까?</p>
+<br>
+<ul>
+<li>
+<p>em.find() : 데이터베이스를 통해서 실제 엔티티 객체 조회</p>
+</li>
+<li>
+<p>em.getReference(): 데이터베이스 조회를 미루는 가짜(프록시) 엔티티 객체 조회</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">getReference</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">1L</span><span class="o">);</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;member = &#34;</span> <span class="o">+</span> <span class="n">member</span><span class="o">.</span><span class="na">getClass</span><span class="o">());</span> <span class="c1">// HibernateProxy 객체
+</span></code></pre></div><p>getReference() 메서드를 사용하면 진짜 객체가 아닌 하이버네이트 내부 로직으로 프록시 엔티티 객체 반환</p>
+<p>내부 구조는 틀은 같지만 내용이 비어있다.</p>
+<figure><a class="lightgallery" href="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png" title="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png" data-thumbnail="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png" data-sub-html="<h2>프록시 객체를 반환한다.</h2>">
+        <img
+            class="lazyload"
+            src="/svg/loading.min.svg"
+            data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png"
+            data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png 2x"
+            data-sizes="auto"
+            alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png" />
+    </a><figcaption class="image-caption">프록시 객체를 반환한다.</figcaption>
+    </figure>
+</li>
+</ul>
+<br>
+<br>
+<p><strong>특징</strong></p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png"
+        title="image" /></p>
+<ul>
+<li>
+<p>실제 클래스를상속받아서 만들어짐</p>
+</li>
+<li>
+<p>실제 클래스와 겉 모양이 같다.</p>
+</li>
+<li>
+<p>사용하는 입장에서는 진짜 객체인지 구분 필요가 없다. (이론적으로)</p>
+</li>
+<li>
+<p>프록시 객체는 실제 객체의 참조(target)를 보관한다.</p>
+</li>
+<li>
+<p>프록시 객체를 호출(getName())하면 프록시 객체는 실제 객체의 메소드 호출</p>
+</li>
+<li>
+<p>프록시는 처음 사용할 때 한 번만 초기화</p>
+</li>
+<li>
+<p>프록시 객체를 초기화 할 때 프록시 객체가 실제 엔티티로 바뀌는 것은 아님, 초기화되면 프록시 객체를 통해
+실제 엔티티에 접근 가능</p>
+</li>
+<li>
+<p>프록시 객체는 원본 엔티티를 상속받음, 따라서 타입 체크시 주의해야함( == 비교 실패, 대신 instance of 사용)</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">m1</span><span class="o">.</span><span class="na">getClass</span><span class="o">()</span> <span class="o">==</span> <span class="n">m2</span><span class="o">.</span><span class="na">getClass</span><span class="o">()</span> <span class="c1">//false
+</span><span class="c1"></span><span class="n">m1</span> <span class="k">instanceof</span> <span class="n">Member</span>
+<span class="n">m2</span> <span class="k">instanceof</span> <span class="n">Member</span>
+</code></pre></div></li>
+</ul>
+<br>
+<ul>
+<li>
+<p>영속성 컨텍스트에 찾는 엔티티가 이미 있으면 em.getReference()를 호출해도 실제 엔티티 반환</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">m1</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">member1</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;m1 = &#34;</span><span class="o">+</span> <span class="n">m1</span><span class="o">.</span><span class="na">getClass</span><span class="o">());</span><span class="c1">//Member
+</span><span class="c1"></span>
+<span class="n">Member</span> <span class="n">reference</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">getReference</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">member1</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;reference = &#34;</span> <span class="n">reference</span><span class="o">.</span><span class="na">getClass</span><span class="o">());</span> <span class="c1">//Member
+</span><span class="c1"></span>
+<span class="n">m1</span> <span class="o">==</span> <span class="n">reference</span> <span class="c1">//true
+</span></code></pre></div><p>이미 Member를 1차 캐시에도 올라와 있는데, 프록시를 반환할 필요가 없다.</p>
+</li>
+</ul>
+<br>
+<ul>
+<li>
+<p>반대로 getReference()로 프록시객체를 가지고 있으면 실제로 find()를 했을때도 프록시 객체를 반환함</p>
+</li>
+<li>
+<p>영속성 컨텍스트의 도움을 받을 수 없는 준영속 상태일 때, 프록시를 초기화하면 문제 발생</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">refMember</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">getReference</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">member</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;refMember = &#34;</span><span class="o">+</span> <span class="n">refMember</span><span class="o">.</span><span class="na">getClass</span><span class="o">());</span><span class="c1">//Proxy
+</span><span class="c1"></span>
+<span class="n">em</span><span class="o">.</span><span class="na">detach</span><span class="o">(</span><span class="n">refMember</span><span class="o">);</span>
+<span class="c1">//em.clear
+</span><span class="c1"></span>
+<span class="n">refMember</span><span class="o">.</span><span class="na">getUsername</span><span class="o">();</span> <span class="c1">//org.hibernate.LazyInitializationException
+</span></code></pre></div></li>
+</ul>
+<br>
+<br>
+<p><strong>프록시 객체의 초기화</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">getRefernce</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="s">&#34;id1&#34;</span><span class="o">);</span><span class="c1">//(1)
+</span><span class="c1"></span><span class="n">member</span><span class="o">.</span><span class="na">getName</span><span class="o">();</span><span class="c1">//(2)
+</span></code></pre></div><p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png"
+        title="image" /></p>
+<p>코드 1라인에서 getReference()를 호출하면 프록시객체를 가져온 다음, getName()을 호출하면</p>
+<p>JPA가 영속성 컨텍스트에 초기화 요청을 한다.</p>
+<p>영속성 컨텍스트에서는 실제 DB를 조회해서 가져온 다음 실제 Entity에 값을 넣어 생성한 다음 프록시 객체는</p>
+<p>실제 엔티티를 연결해서 실제 엔티티를 반환한다.</p>
+<p>그 이후에는 이미 초기화되어있는 프록시객체 여기에 해당 엔티티를 반환한다.</p>
+<br>
+<p><strong>프록시 확인</strong></p>
+<ul>
+<li>프록시 인스턴스의 초기화 여부 확인
+: PersistenceUnitUtil.isLoaded(Object entity) → entityManagerFactory.getPersistenceUnitUtil().isLoaded(object)</li>
+<li>프록시 클래스 확인 방법
+: entity.getClass().getname() 출력(..javasist.. or HibernateProxy&hellip;)</li>
+<li>프록시 강제 초기화
+: org.hibernate.Hibernate.initialize(entity);</li>
+<li>참고: JPA 표준은 강제 초기화 없음
+강제호출 : method.getName();</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="2-즉시로딩과-지연로딩">2. 즉시로딩과 지연로딩</h2>
+<hr>
+<h3 id="지연-로딩">지연 로딩</h3>
+<p>Member를 조회할 때 Team(연관관계)도 함께 조회해야 할까?
+: 단순히 member 정보만사용하는 비즈니스 로직</p>
+<p><strong>지연 로딩 LAZY을 사용해서 프록시로 조회</strong></p>
+<br>
+<p><strong><code>fetch = FetchType.LAZY</code></strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/*Member*/</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+
+    <span class="o">...</span>
+    <span class="nd">@ManyToOne</span><span class="o">(</span><span class="n">fetch</span> <span class="o">=</span> <span class="n">FetchType</span><span class="o">.</span><span class="na">LAZY</span><span class="o">)</span> <span class="c1">//지연로딩 사용
+</span><span class="c1"></span>    <span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;TEAM_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Team</span> <span class="n">team</span><span class="o">;</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="o">...</span>
+<span class="n">Member</span> <span class="n">m</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">member1</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>  <span class="c1">// Member 객체 반환
+</span><span class="c1"></span><span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;m = &#34;</span><span class="o">+</span> <span class="n">m</span><span class="o">.</span><span class="na">getTeam</span><span class="o">().</span><span class="na">getClass</span><span class="o">());</span> <span class="c1">// Team$HibernateProxy객체 반환
+</span><span class="c1"></span><span class="n">m</span><span class="o">.</span><span class="na">getTeam</span><span class="o">().</span><span class="na">getName</span><span class="o">()</span>                               <span class="c1">// team을 실제로 사용하는 시점에서 db조회 엔티티 반환
+</span><span class="c1"></span><span class="o">...</span>
+</code></pre></div><p>연관관계에 있는 다른 엔티티를 사용하는 빈도수가 낮을 경우 지연로딩을 사용해 불필요한 엔티티 조회를 막을 수 있다.</p>
+<br>
+<br>
+<h3 id="즉시-로딩">즉시 로딩</h3>
+<p>❓Member와 Team을 같이 쓰는 빈도가 높을 경우에는 어떻게 해야 할까?</p>
+<br>
+<br>
+<p><strong>즉시 로딩 EAGER를 사용해서 함꼐 조회
+fetch = FetchType.EAGER</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/*Member*/</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span><span class="o">{</span>
+    <span class="o">...</span>
+    <span class="nd">@ManyToOne</span><span class="o">(</span><span class="n">fetch</span> <span class="o">=</span> <span class="n">FetchType</span><span class="o">.</span><span class="na">EAGER</span><span class="o">)</span> <span class="c1">//즉시로딩 사용
+</span><span class="c1"></span>    <span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;TEAM_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Team</span> <span class="n">team</span><span class="o">;</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="o">...</span>
+<span class="n">Member</span> <span class="n">m</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">member1</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>  <span class="c1">// Member 객체 반환
+</span><span class="c1"></span><span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;m = &#34;</span><span class="o">+</span> <span class="n">m</span><span class="o">.</span><span class="na">getTeam</span><span class="o">().</span><span class="na">getClass</span><span class="o">());</span> <span class="c1">// Team 객체 반환
+</span><span class="c1"></span><span class="o">...</span>
+</code></pre></div><p>Member를 가져오는 시점에서 연관관계에 있는 Team까지 바로 가져오는 것을 즉시 로딩이라고 한다.</p>
+<br>
+<br>
+<h3 id="프록시와-즉시로딩-주의">프록시와 즉시로딩 주의</h3>
+<ul>
+<li>가급적으로 지연 로딩만 사용(특히 실무에서)</li>
+<li>즉시 로딩을 적용하면 예상하지 못한 SQL이 발생 <br>
+<strong>ex</strong>: 하나의 엔티티에 연관된 엔티티가 다수라면 find() 한 번 수행시 수십 수백개의 테이블을 한번에&hellip;</li>
+<li>즉시 로딩은 JPQL에서 N+1 문제를 일으킨다. <br>
+<strong>ex:</strong></li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/*Member*/</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span><span class="o">{</span>
+    <span class="o">...</span>
+    <span class="nd">@ManyToOne</span><span class="o">(</span><span class="n">fetch</span> <span class="o">=</span> <span class="n">FetchType</span><span class="o">.</span><span class="na">EAGER</span><span class="o">)</span> <span class="c1">//즉시로딩 사용
+</span><span class="c1"></span>    <span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;TEAM_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Team</span> <span class="n">team</span><span class="o">;</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="o">...</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">members</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select m from Member m&#34;</span><span class="o">,</span> <span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+				<span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+<span class="c1">//SQL: select * from Member
+</span><span class="c1">//SQL: select * from Team where TEAM_ID = xxx
+</span><span class="c1"></span><span class="o">...</span>
+</code></pre></div><p>위 JPQL을 그대로 쿼리로 번역하게 되면 Member를 가져오기 위한 쿼리 수행 이후 바로 Member 내부의 <br> Team을 가져오기 위한 쿼리를 다시 수행하게 된다 → N+1(1개의 쿼리를 날리면 +N개의 쿼리가 추가수행된다)</p>
+<p><em>만약, Team과 같은 연관관계가 더 있다면?</em></p>
+<ul>
+<li>@ManyToOne, @OneToOne은 기본이 즉시 로딩으로 되어 있다.→ <strong>직접 전부 LAZY로 설정</strong></li>
+<li>@OneToMany, @ManyToMany는 기본이 지연 로딩</li>
+</ul>
+<br>
+<br>
+<h3 id="n1의-해결책">N+1의 해결책</h3>
+<ul>
+<li>우선 전부 지연로딩으로 설정한다.
+그 다음 가져와야 하는 엔티티에 한해서 fetch join을 사용해서 가져온다.</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">members</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select m from Member m join fetch m.team&#34;</span><span class="o">,</span> <span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+ 				<span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+</code></pre></div><p>이렇게 JPQL을 실행하면 <code>fetch join</code>을 통해 Team 도 가져왔기 때문에 문제가 없다.</p>
+<br>
+<br>
+<h3 id="지연-로딩-활용">지연 로딩 활용</h3>
+<ul>
+<li>Member와 Team은 자주 함께 사용 → 즉시 로딩</li>
+<li>member와 Order는 가끔 사용 → 지연 로딩</li>
+<li>Order와 Product는 자주 함께 사용 → 즉시 로딩</li>
+</ul>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png"
+        title="image" /></p>
+<br>
+<br>
+<h3 id="지연-로딩-활용---실무">지연 로딩 활용 - 실무</h3>
+<ul>
+<li>
+<p>모든 연관관계에서 지연 로딩을 사용하자.</p>
+</li>
+<li>
+<p>실무에서 즉시 로딩을 사용하지 마라.</p>
+</li>
+<li>
+<p>JPQL fetch 조인이나, 엔티티 그래프 기능을 사용해라.</p>
+</li>
+<li>
+<p>즉시 로딩은 내가 의도하지 않은 쿼리가 수행된다.</p>
+</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="3-영속성-전이-cascad와-고아-객체">3. 영속성 전이 (CASCAD)와 고아 객체</h2>
+<hr>
+<p><strong>특정 엔티티를 영속 상태로 만들 때 연관된 엔티티도 함께 영속 상태로 만들고 싶을 때 사용.</strong> <br></p>
+<ul>
+<li><strong>Ex</strong>: 부모 엔티티를 저장할 때 자식 엔티티도 함께 저장.</li>
+</ul>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png"
+        title="image" /></p>
+<br>
+<br>
+<p><strong>영속성 전이: 저장</strong></p>
+<ul>
+<li>
+<p>영속성 전이가 안되는 기본적인 엔티티 저장 방법</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/*영속성 전이가 안되는 엔티티 저장 방빕*/</span>
+<span class="o">...</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Parent</span><span class="o">{</span>
+<span class="o">...</span>
+<span class="nd">@OneToMany</span><span class="o">(</span><span class="n">mappedBy</span> <span class="o">=</span> <span class="s">&#34;parent&#34;</span><span class="o">)</span>
+<span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Child</span><span class="o">&gt;</span> <span class="n">childList</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;&gt;();</span>
+
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">addChild</span><span class="o">(</span><span class="n">Child</span> <span class="n">child</span><span class="o">){</span>
+    <span class="n">childList</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">child</span><span class="o">);</span>
+    <span class="n">child</span><span class="o">.</span><span class="na">setParent</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+<span class="o">}</span>
+<span class="o">...</span>
+<span class="o">}</span>
+
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Child</span><span class="o">{</span>
+    <span class="o">...</span>
+    <span class="nd">@ManyToOne</span>
+    <span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;parent_id&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Parent</span> <span class="n">parent</span><span class="o">;</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="o">...</span>
+<span class="n">Child</span> <span class="n">child1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Child</span><span class="o">();</span>
+<span class="n">Child</span> <span class="n">child2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Child</span><span class="o">();</span>
+<span class="n">Parent</span> <span class="n">parent</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Parent</span><span class="o">();</span>
+<span class="n">parent</span><span class="o">.</span><span class="na">addChild</span><span class="o">(</span><span class="n">child1</span><span class="o">);</span>
+<span class="n">parent</span><span class="o">.</span><span class="na">addChild</span><span class="o">(</span><span class="n">child2</span><span class="o">);</span>
+
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">parent</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">child1</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">child2</span><span class="o">);</span> <span class="c1">// persist를 3번이나 해야한다.
+</span></code></pre></div><p>위와 같이 persist를 세 번 호출해야 정상적으로 동작을 한다. 아주 아름답지 않은&lt;?&gt; 코드이다.</p>
+<p>persist 한 번으로 child 까지 같이 persist는 불가능한가?</p>
+</li>
+</ul>
+<br>
+<br>
+<ul>
+<li>
+<p>영속정 전이(CASCADE)를 이용한 엔티티 저장 방법</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/*영속성 전이가 안되는 엔티티 저장 방빕*/</span>
+<span class="o">...</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Parent</span><span class="o">{</span>
+	<span class="o">...</span>
+	<span class="nd">@OneToMany</span><span class="o">(</span><span class="n">mappedBy</span> <span class="o">=</span> <span class="s">&#34;parent&#34;</span><span class="o">,</span> <span class="n">cascade</span><span class="o">=</span><span class="n">CascadeType</span><span class="o">.</span><span class="na">ALL</span><span class="o">)</span><span class="c1">//영속성 전이 속성(CASCADE)사용
+</span><span class="c1"></span>	<span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Child</span><span class="o">&gt;</span> <span class="n">childList</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;&gt;();</span>
+
+	<span class="kd">public</span> <span class="kt">void</span> <span class="nf">addChild</span><span class="o">(</span><span class="n">Child</span> <span class="n">child</span><span class="o">){</span>
+		<span class="n">childList</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">child</span><span class="o">);</span>
+		<span class="n">child</span><span class="o">.</span><span class="na">setParent</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+	<span class="o">}</span>
+	<span class="o">...</span>
+<span class="o">}</span>
+
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Child</span><span class="o">{</span>
+	<span class="o">...</span>
+	<span class="nd">@ManyToOne</span>
+	<span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;parent_id&#34;</span><span class="o">)</span>
+	<span class="kd">private</span> <span class="n">Parent</span> <span class="n">parent</span><span class="o">;</span>
+	<span class="o">...</span>
+<span class="o">}</span>
+
+<span class="o">...</span>
+<span class="n">Child</span> <span class="n">child1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Child</span><span class="o">();</span>
+<span class="n">Child</span> <span class="n">child2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Child</span><span class="o">();</span>
+<span class="n">Parent</span> <span class="n">parent</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Parent</span><span class="o">();</span>
+<span class="n">parent</span><span class="o">.</span><span class="na">addChild</span><span class="o">(</span><span class="n">child1</span><span class="o">);</span>
+<span class="n">parent</span><span class="o">.</span><span class="na">addChild</span><span class="o">(</span><span class="n">child2</span><span class="o">);</span>
+
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">parent</span><span class="o">);</span><span class="c1">// parent만 persist 해주니 child도 같이 persist된다.
+</span></code></pre></div><p>parent만 persist해주니 그에 관련된 childList들도 같이 persist가 된다.</p>
+</li>
+</ul>
+<br>
+<br>
+<p><strong>CASCADE의 종류</strong></p>
+<ul>
+<li><code>ALL</code> : 모두 적용(모든 곳에서 맞춰야 하면 해당 옵션)</li>
+<li><code>PERSIST</code> : 영속(저장할 때만 사용할 것이라면 해당 옵션)</li>
+<li><code>REMOVE</code> : 삭제</li>
+<li><code>MERGE</code> : 병합</li>
+<li><code>REFRESH</code> : REFRESH</li>
+<li><code>DETACH</code> : DETACH</li>
+</ul>
+<br>
+<br>
+<h3 id="영속성-전이cascade는-언제-써야-할까">영속성 전이(CASCADE)는 언제 써야 할까?</h3>
+<p>: 전이 될 대상이 한 군데에서만 사용된다면 써도 된다.</p>
+<p>하지만, 해당 엔티티(Child)가 특정 엔티티(Parent)에 종속되지 않고 여러군데서 사용된다면</p>
+<p>사요하지 않는게 좋다.</p>
+<ul>
+<li>라이프 사이클이 동일할 때</li>
+<li>단일 소유자 관계일 때</li>
+</ul>
+<br>
+<br>
+<dl>
+<dt><strong>고아 객체</strong></dt>
+<dd>
+<p>고아 객체 제거: 부모 엔티티와 연관관계가 끊어진 자식 엔티티를 자동으로 삭제</p>
+</dd>
+</dl>
+<ul>
+<li>
+<p>orphanRemoval = true</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Parent</span> <span class="o">{</span>
+
+    <span class="o">...</span>
+    <span class="nd">@OneToMany</span><span class="o">(</span><span class="n">mappedBy</span> <span class="o">=</span> <span class="s">&#34;parent&#34;</span><span class="o">,</span> <span class="n">cascade</span><span class="o">=</span><span class="n">CascadeType</span><span class="o">.</span><span class="na">ALL</span><span class="o">,</span> <span class="n">orphanRemoval</span> <span class="o">=</span> <span class="kc">true</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Child</span><span class="o">&gt;</span> <span class="n">childList</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;&gt;();</span>
+
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">addChild</span><span class="o">(</span><span class="n">Child</span> <span class="n">child</span><span class="o">){</span>
+        <span class="n">childList</span><span class="o">.</span><span class="na">add</span><span class="o">(</span><span class="n">child</span><span class="o">);</span>
+        <span class="n">child</span><span class="o">.</span><span class="na">setParent</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+    <span class="o">}</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Child</span><span class="o">{</span>
+
+    <span class="o">...</span>
+    <span class="nd">@ManyToOne</span>
+    <span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;parent_id&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Parent</span> <span class="n">parent</span><span class="o">;</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="o">...</span>
+<span class="n">Child</span> <span class="n">child1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Child</span><span class="o">();</span>
+<span class="n">Child</span> <span class="n">child2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Child</span><span class="o">();</span>
+<span class="n">Parent</span> <span class="n">parent</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Parent</span><span class="o">();</span>
+<span class="n">parent</span><span class="o">.</span><span class="na">addChild</span><span class="o">(</span><span class="n">child1</span><span class="o">);</span>
+<span class="n">parent</span><span class="o">.</span><span class="na">addChild</span><span class="o">(</span><span class="n">child2</span><span class="o">);</span>
+
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">parent</span><span class="o">);</span><span class="c1">// parent만 persist 해주니 child도 같이 persist된다.
+</span><span class="c1"></span>
+<span class="n">em</span><span class="o">.</span><span class="na">flush</span><span class="o">();</span>
+<span class="n">em</span><span class="o">.</span><span class="na">clear</span><span class="o">();</span>
+
+<span class="n">Parent</span> <span class="n">findParent</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Parent</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">parent</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>
+<span class="n">findParent</span><span class="o">.</span><span class="na">getChildList</span><span class="o">().</span><span class="na">remove</span><span class="o">(</span><span class="n">0</span><span class="o">);</span> <span class="c1">// orphanRemoval 동작
+</span></code></pre></div></li>
+</ul>
+<br>
+<p><strong>고아 객체 - 주의</strong></p>
+<ul>
+<li>참조가 제거된 엔티티는 다른 곳에서 참조하지 않는 고아 객체로 보고 삭제하는 기능</li>
+<li>참조하는 고이 하나일 때 사용해야 함</li>
+<li>특정 엔티티가 개인 소유할 때 사용</li>
+<li>@OneToOne, @OneToMany만 가능</li>
+<li>참고: 개념적으로 부모를 제거하면 자식은 고아가 된다. 따라서 고아 객체 제거 기능을 활성화 하면,
+부모를 제거할 때 자식도 함께 제거된다. 마치 CAscadeType.REMOVE처럼 동작한다.</li>
+<li>Parent객체를 지우게 되면 Parent가 소유하고있는 ChildList에 속한엔티티들이 전부 같이 삭제된다.</li>
+</ul>
+<br>
+<br>
+<p><strong>영속성 전이 + 고아 객체, 생명 주기
+(CascadeType.ALL + orphanRemoval=true)</strong></p>
+<ul>
+<li>스스로 생명주기를 관리하는 엔티티는 em.persist()로 영속화, em.remove()로 제거</li>
+<li>두 옵션을 모두 활성화 하면 부모 엔티티를 통해서 자식의 생명주기 관리가 가능하다.</li>
+<li>도메인 주고 설계(DDD)의 Aggregate Root 개념을 구현할 때 유용</li>
+</ul>
+<br>
+<br>
+<p><strong>참고: Aggregate Root개념을 알기 위해 우선 Aggregate를 설명해야 한다.</strong></p>
+<p>연관깊은 도메인들을 각각이 아닌 하나의 집합으로 다루는 것을 Aggregate라 한다.  <br> 즉 데이터 변경의 단위로 다루는 연관 객체의묶음.<br>Aggregate에는 루트(root)와 경계(boundary)가 있는데, 경계는 Aggregate에 무엇이 포함되고 포함되지 않는지를 정의한다. <br>
+루트는 단 하나만 존재하며, Aggregate에 포함된 특정 엔티티를 가르킨다. <br>
+경계안의 객체는 서로 참조가 가능하지만, 경계밖의 객체는 해당 Aggregate의 구성요소 가운데 루트만 참조할 수 있다. <br></p>
+<p>참고: DDD에서 루트 엔티티는 전역 식별성 Global Identity을 가진 엔티티라고 합니다. <br></p>
+<ul>
+<li><strong>Ex)</strong>  주문시스템의 Order Entity</li>
+</ul>
+<br>
+<br>
+<br>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-29</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/jpa-proxy-and-management/" data-title="프록시와 연관관계 관리" data-hashtags="JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/jpa-proxy-and-management/" data-hashtag="JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/jpa-proxy-and-management/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/jpa-proxy-and-management/" data-title="프록시와 연관관계 관리" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/jpa-advanced-mapping/" class="prev" rel="prev" title="고급 매핑"><i class="fas fa-angle-left fa-fw"></i>고급 매핑</a>
+            <a href="/posts/jpa-value-type/" class="next" rel="next" title="값 타입">값 타입<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

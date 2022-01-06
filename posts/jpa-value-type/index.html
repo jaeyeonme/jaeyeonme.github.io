@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>값 타입 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="값 타입" />
+<meta property="og:description" content="1. 기본값 타입  엔티티 타입
+  @Entity로 정의하는 객체
+  데이터가 변해도 식별자로 지속해서 추적 가능
+⇒ 엔티티 내부의 모든 값들을 바꿔도 식별자만 유지되면 추적이 가능하다는 의미
+  Ex: 회원 엔티티의 키나 나이 값을 변경해도 식별자로 인식 가능
+  값 타입
+ int, integer, String처럼 단순히 값으로 사용하는 자바 기본 타입이나 객체 식별자가 없고 값만 있으므로 변경시 추적 불가 Ex: 숫자 100을 200으로 변경하면 완전히 다른 값으로 대체  값 타입 분류
+ 기본값 타입  자바 기본 타입(int, double) 래퍼 클래스(Integer, Long) String   임베디드 타입(enbedded type, 복합 값 타입)  Ex: 우편번호, 좌표같은 복합 값을 Position클래스로 만들어 쓰려고 하는 것을 임베디드 타입   컬렉션 값 타입(collection value type)  Java collection(Array, Map, Set)에 값을 넣을수 있는 것을 컬렉션 값 타입이라 한다.    값 타입 : 기본값 타입
+ Ex: String name, int age 생명주기를 엔티티에 의존  회원을 삭제하면 이름, 나이 필드도 함께 삭제   값 타입은 공유하면 안된다.  Side Effect → 회원 이름 변경시 다른 회원의 이름도 함께 변경되면 안된다.     참고: 자바의 기본 타입은 절대 공유가 되지 않는다.  int, double 같은 기본 타입(primitive type)은 절대 공유되지 않는다. 기본 타입은 항상 값을 복사함 Integer같은 래퍼 클래스나 String 같은 특수한 클래스는 공유 가능한 객체이지만 변경할 수 없다.    2. 임베디드 타입  개요
+ 새로운 값 타입을 직접 정의할 수 있다. JPA는 임베디드 타입(embedded type)이라 한다. 주로 기본 값 타입을 모아서 만들어서 복합 값 타입이라고도 함 int, String과 같은 값 타입  임베디드 타입 사용법
+ @Embeddable : 값 타입을 정의하는 곳에 표시 @Embedded : 값 타입을 사용하는 곳에 표시 기본 생성자 필수   Example  예제를 통해 알아보는게 이해하기 쉽다.  회원 엔티티는 이름, 근무 시작일, 근무 종료일, 주소 도시, 주소 번지, 주소 우편번호를 가진다.
+  city, street, zipcode는 주소로 합칠 수 있을 것 같다.
+  근무 시작일, 근무 종료일은 근무시간으로 합칠 수 있을 것 같다.
+  회원 엔티티의 몇몇 값을 주소, 근무시간으로 합치면 어떻게 될까.
+코드를 통해 좀 더 자세히 알아보자.
+@Embeddable //값 타입이 정의되는 곳에 @Embeddable 사용 public class Period { private LocalDateTime startDate; private LocalDateTime endDate; public Period() { } } @Embeddable //값 타입이 정의되는 곳에 @Embeddable 사용 public class Address { private String city; private String street; private String zipcode; public Address() { } } @Entity public class Member { @Id @GeneratedValue @Column(name = &#34;MEMBER_ID&#34;) private Long id; @Column(name = &#34;USERNAME&#34;) private String name; /* //임베디드 타입을 사용하지 않으면 주석 내의 기존 형태로 값 타입으로 선언해줘야 한다. //Period private LocalDateTime startDate; private LocalDateTime endDate; //Address private String city; private String street; private String zipcode; */ @Embedded //값 타입이 사용되는 곳에 @Embedded 사용  private Period workPeriod; @Embedded //값 타입이 사용되는 곳에 @Embedded 사용  private Address homeAddress; } 
+임베디드 타입의 장점
+ 재사용  Period나 Address는 다른 객체에서도 사용할 수 있어 재사용성을 높힌다.   높은 응집도 Period.isWork()처럼 해당 값 타입만 사용하는 의미있는 메소드를 만들 수 있음  private boolean isWork(){ ... }  임베디드 타입을 포함한 모든 값 타입은, 값 타입을 소유한 엔티티에 생명주기를 의존한다." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/jpa-value-type/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-29T14:00:00+00:00" />
+<meta property="article:modified_time" content="2021-12-29T14:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="값 타입"/>
+<meta name="twitter:description" content="1. 기본값 타입  엔티티 타입
+  @Entity로 정의하는 객체
+  데이터가 변해도 식별자로 지속해서 추적 가능
+⇒ 엔티티 내부의 모든 값들을 바꿔도 식별자만 유지되면 추적이 가능하다는 의미
+  Ex: 회원 엔티티의 키나 나이 값을 변경해도 식별자로 인식 가능
+  값 타입
+ int, integer, String처럼 단순히 값으로 사용하는 자바 기본 타입이나 객체 식별자가 없고 값만 있으므로 변경시 추적 불가 Ex: 숫자 100을 200으로 변경하면 완전히 다른 값으로 대체  값 타입 분류
+ 기본값 타입  자바 기본 타입(int, double) 래퍼 클래스(Integer, Long) String   임베디드 타입(enbedded type, 복합 값 타입)  Ex: 우편번호, 좌표같은 복합 값을 Position클래스로 만들어 쓰려고 하는 것을 임베디드 타입   컬렉션 값 타입(collection value type)  Java collection(Array, Map, Set)에 값을 넣을수 있는 것을 컬렉션 값 타입이라 한다.    값 타입 : 기본값 타입
+ Ex: String name, int age 생명주기를 엔티티에 의존  회원을 삭제하면 이름, 나이 필드도 함께 삭제   값 타입은 공유하면 안된다.  Side Effect → 회원 이름 변경시 다른 회원의 이름도 함께 변경되면 안된다.     참고: 자바의 기본 타입은 절대 공유가 되지 않는다.  int, double 같은 기본 타입(primitive type)은 절대 공유되지 않는다. 기본 타입은 항상 값을 복사함 Integer같은 래퍼 클래스나 String 같은 특수한 클래스는 공유 가능한 객체이지만 변경할 수 없다.    2. 임베디드 타입  개요
+ 새로운 값 타입을 직접 정의할 수 있다. JPA는 임베디드 타입(embedded type)이라 한다. 주로 기본 값 타입을 모아서 만들어서 복합 값 타입이라고도 함 int, String과 같은 값 타입  임베디드 타입 사용법
+ @Embeddable : 값 타입을 정의하는 곳에 표시 @Embedded : 값 타입을 사용하는 곳에 표시 기본 생성자 필수   Example  예제를 통해 알아보는게 이해하기 쉽다.  회원 엔티티는 이름, 근무 시작일, 근무 종료일, 주소 도시, 주소 번지, 주소 우편번호를 가진다.
+  city, street, zipcode는 주소로 합칠 수 있을 것 같다.
+  근무 시작일, 근무 종료일은 근무시간으로 합칠 수 있을 것 같다.
+  회원 엔티티의 몇몇 값을 주소, 근무시간으로 합치면 어떻게 될까.
+코드를 통해 좀 더 자세히 알아보자.
+@Embeddable //값 타입이 정의되는 곳에 @Embeddable 사용 public class Period { private LocalDateTime startDate; private LocalDateTime endDate; public Period() { } } @Embeddable //값 타입이 정의되는 곳에 @Embeddable 사용 public class Address { private String city; private String street; private String zipcode; public Address() { } } @Entity public class Member { @Id @GeneratedValue @Column(name = &#34;MEMBER_ID&#34;) private Long id; @Column(name = &#34;USERNAME&#34;) private String name; /* //임베디드 타입을 사용하지 않으면 주석 내의 기존 형태로 값 타입으로 선언해줘야 한다. //Period private LocalDateTime startDate; private LocalDateTime endDate; //Address private String city; private String street; private String zipcode; */ @Embedded //값 타입이 사용되는 곳에 @Embedded 사용  private Period workPeriod; @Embedded //값 타입이 사용되는 곳에 @Embedded 사용  private Address homeAddress; } 
+임베디드 타입의 장점
+ 재사용  Period나 Address는 다른 객체에서도 사용할 수 있어 재사용성을 높힌다.   높은 응집도 Period.isWork()처럼 해당 값 타입만 사용하는 의미있는 메소드를 만들 수 있음  private boolean isWork(){ ... }  임베디드 타입을 포함한 모든 값 타입은, 값 타입을 소유한 엔티티에 생명주기를 의존한다."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/jpa-value-type/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/jpa-proxy-and-management/" /><link rel="next" href="https://jaeyeonme.github.io/posts/jpa-object-query-language1/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "값 타입",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/jpa-value-type\/"
+        },"genre": "posts","keywords": "JPA, Hibernate","wordcount":  1517 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/jpa-value-type\/","datePublished": "2021-12-29T14:00:00+00:00","dateModified": "2021-12-29T14:00:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">값 타입</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-29">2021-12-29</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;1517 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;8 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-기본값-타입">1. 기본값 타입</a></li>
+    <li><a href="#2-임베디드-타입">2. 임베디드 타입</a>
+      <ul>
+        <li><a href="#임베디드-타입을-통해-객체를-분리하더라도-테이블은-하나만-매핑된다">임베디드 타입을 통해 객체를 분리하더라도 테이블은 하나만 매핑된다.</a></li>
+        <li><a href="#member안에-동일한-임베디드-타입이-있다면-어떻게-될까">Member안에 동일한 임베디드 타입이 있다면 어떻게 될까?</a></li>
+        <li><a href="#attributeoverride-를-사용해서-컬러-명-속성을-재정의-해준다">@AttributeOverride 를 사용해서 컬러 명 속성을 재정의 해준다.</a></li>
+      </ul>
+    </li>
+    <li><a href="#3-값-타입과-불변-객체">3. 값 타입과 불변 객체</a>
+      <ul>
+        <li><a href="#-값-타입은-복잡한-객체-세상을-조금이라도-단순화-하려고-만든-개념-따라서-값-타입은-단순하고-안전하게-다룰-수-있어야-한다">: <strong>값 타입은 복잡한 객체 세상을 조금이라도 단순화 하려고 만든 개념. 따라서 값 타입은 단순하고 안전하게 다룰 수 있어야 한다.</strong></a></li>
+        <li><a href="#값인스턴스을-복사해서-사용한다">값(인스턴스)을 복사해서 사용한다.</a></li>
+        <li><a href="#누군가-실수로-값-복사가-아닌-기존-값을-넣는다면-막을-수-있을까">누군가 실수로 값 복사가 아닌 기존 값을 넣는다면 막을 수 있을까?</a></li>
+      </ul>
+    </li>
+    <li><a href="#4-값-타입의-비교">4. 값 타입의 비교</a></li>
+    <li><a href="#5-값-타입-컬렉션">5. 값 타입 컬렉션</a>
+      <ul>
+        <li><a href="#정리">정리</a></li>
+        <li><a href="#식별자가-필요하고-지속해서값을추적-변경해야한다면-그것은값타입이아닌엔티티">식별자가 필요하고, 지속해서값을추적, 변경해야한다면 그것은값타입이아닌엔티티</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-기본값-타입">1. 기본값 타입</h2>
+<hr>
+<p><strong>엔티티 타입</strong></p>
+<ul>
+<li>
+<p>@Entity로 정의하는 객체</p>
+</li>
+<li>
+<p>데이터가 변해도 식별자로 지속해서 추적 가능</p>
+<p>⇒ 엔티티 내부의 모든 값들을 바꿔도 식별자만 유지되면 추적이 가능하다는 의미</p>
+</li>
+<li>
+<p>Ex: 회원 엔티티의 키나 나이 값을 변경해도 식별자로 인식 가능</p>
+</li>
+</ul>
+<br>
+<p><strong>값 타입</strong></p>
+<ul>
+<li>int, integer, String처럼 단순히 값으로 사용하는 자바 기본 타입이나 객체</li>
+<li>식별자가 없고 값만 있으므로 변경시 <strong>추적 불가</strong></li>
+<li>Ex: 숫자 100을 200으로 변경하면 완전히 다른 값으로 대체</li>
+</ul>
+<br>
+<p><strong>값 타입 분류</strong></p>
+<ol>
+<li>기본값 타입
+<ul>
+<li>자바 기본 타입(int, double)</li>
+<li>래퍼 클래스(Integer, Long)</li>
+<li>String</li>
+</ul>
+</li>
+<li>임베디드 타입(enbedded type, 복합 값 타입)
+<ul>
+<li><em>Ex: 우편번호, 좌표같은 복합 값을 Position클래스로 만들어 쓰려고 하는 것을 임베디드 타입</em></li>
+</ul>
+</li>
+<li>컬렉션 값 타입(collection value type)
+<ul>
+<li><em>Java collection(Array, Map, Set)에 값을 넣을수 있는 것을 컬렉션 값 타입이라 한다.</em></li>
+</ul>
+</li>
+</ol>
+<br>
+<p><strong>값 타입 : 기본값 타입</strong></p>
+<ul>
+<li>Ex: String name, int age</li>
+<li>생명주기를 엔티티에 의존
+<ul>
+<li><em>회원을 삭제하면 이름, 나이 필드도 함께 삭제</em></li>
+</ul>
+</li>
+<li>값 타입은 공유하면 안된다.
+<ul>
+<li><em>Side Effect → 회원 이름 변경시 다른 회원의 이름도 함께 변경되면 안된다.</em></li>
+</ul>
+</li>
+</ul>
+<br>
+<ul>
+<li><strong>참고: 자바의 기본 타입은 절대 공유가 되지 않는다.</strong>
+<ul>
+<li>int, double 같은 기본 타입(primitive type)은 절대 공유되지 않는다.</li>
+<li>기본 타입은 항상 값을 복사함</li>
+<li>Integer같은 래퍼 클래스나 String 같은 특수한 클래스는 공유 가능한 객체이지만 변경할 수 없다.</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="2-임베디드-타입">2. 임베디드 타입</h2>
+<hr>
+<p><strong>개요</strong></p>
+<ul>
+<li>새로운 값 타입을 직접 정의할 수 있다.</li>
+<li>JPA는 임베디드 타입(embedded type)이라 한다.</li>
+<li>주로 기본 값 타입을 모아서 만들어서 복합 값 타입이라고도 함</li>
+<li><strong>int, String과 같은 값 타입</strong></li>
+</ul>
+<br>
+<br>
+<p><strong>임베디드 타입 사용법</strong></p>
+<ul>
+<li>@Embeddable : 값 타입을 정의하는 곳에 표시</li>
+<li>@Embedded : 값 타입을 사용하는 곳에 표시</li>
+<li>기본 생성자 필수</li>
+</ul>
+<br>
+<br>
+<dl>
+<dt><strong>Example</strong> <br></dt>
+<dd>예제를 통해 알아보는게 이해하기 쉽다.</dd>
+</dl>
+<p><strong>회원 엔티티는 이름, 근무 시작일, 근무 종료일, 주소 도시, 주소 번지, 주소 우편번호를 가진다.</strong></p>
+<ul>
+<li>
+<p><em>city, street, zipcode는 주소로 합칠 수 있을 것 같다.</em></p>
+</li>
+<li>
+<p><em>근무 시작일, 근무 종료일은 근무시간으로 합칠 수 있을 것 같다.</em></p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png"
+        title="picture" /></p>
+</li>
+</ul>
+<br>
+<br>
+<p><strong>회원 엔티티의 몇몇 값을 주소, 근무시간으로 합치면 어떻게 될까.</strong></p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2028.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2028.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2028.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2028.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2028.png"
+        title="picture" /></p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2029.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2029.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2029.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2029.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2029.png"
+        title="picture" /></p>
+<br>
+<p><strong>코드를 통해 좀 더 자세히 알아보자.</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Embeddable</span>                    <span class="c1">//값 타입이 정의되는 곳에 @Embeddable 사용
+</span><span class="c1"></span><span class="kd">public</span> <span class="kd">class</span> <span class="nc">Period</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">startDate</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">endDate</span><span class="o">;</span>
+		<span class="kd">public</span> <span class="nf">Period</span><span class="o">()</span> <span class="o">{</span> <span class="o">}</span>
+<span class="o">}</span>
+
+<span class="nd">@Embeddable</span>                   <span class="c1">//값 타입이 정의되는 곳에 @Embeddable 사용
+</span><span class="c1"></span><span class="kd">public</span> <span class="kd">class</span> <span class="nc">Address</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">city</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">street</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">zipcode</span><span class="o">;</span>
+	<span class="kd">public</span> <span class="nf">Address</span><span class="o">()</span> <span class="o">{</span> <span class="o">}</span>
+<span class="o">}</span>
+
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+    <span class="nd">@Id</span> <span class="nd">@GeneratedValue</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;USERNAME&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">name</span><span class="o">;</span>
+    <span class="cm">/*
+</span><span class="cm">    //임베디드 타입을 사용하지 않으면 주석 내의 기존 형태로 값 타입으로 선언해줘야 한다.
+</span><span class="cm">    //Period
+</span><span class="cm">    private LocalDateTime startDate;
+</span><span class="cm">    private LocalDateTime endDate;
+</span><span class="cm">    //Address
+</span><span class="cm">    private String city;
+</span><span class="cm">    private String street;
+</span><span class="cm">    private String zipcode;
+</span><span class="cm">    */</span>
+
+    <span class="nd">@Embedded</span> <span class="c1">//값 타입이 사용되는 곳에 @Embedded 사용
+</span><span class="c1"></span>    <span class="kd">private</span> <span class="n">Period</span> <span class="n">workPeriod</span><span class="o">;</span>
+
+    <span class="nd">@Embedded</span> <span class="c1">//값 타입이 사용되는 곳에 @Embedded 사용
+</span><span class="c1"></span>    <span class="kd">private</span> <span class="n">Address</span> <span class="n">homeAddress</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<p><strong>임베디드 타입의 장점</strong></p>
+<ul>
+<li>재사용
+<ul>
+<li>Period나 Address는 다른 객체에서도 사용할 수 있어 재사용성을 높힌다.</li>
+</ul>
+</li>
+<li>높은 응집도</li>
+<li>Period.isWork()처럼 해당 값 타입만 사용하는 의미있는 메소드를 만들 수 있음</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">private</span> <span class="kt">boolean</span> <span class="nf">isWork</span><span class="o">(){</span>
+	<span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>임베디드 타입을 포함한 모든 값 타입은, 값 타입을 소유한 엔티티에 생명주기를 의존한다.</li>
+</ul>
+<br>
+<br>
+<h3 id="임베디드-타입을-통해-객체를-분리하더라도-테이블은-하나만-매핑된다">임베디드 타입을 통해 객체를 분리하더라도 테이블은 하나만 매핑된다.</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2030.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2030.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2030.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2030.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2030.png"
+        title="picture" /></p>
+<br>
+<p><strong>임베디드 타입과 테이블 매핑</strong></p>
+<ul>
+<li>임베디드 타입은 엔티티의 값일 뿐이다.</li>
+<li>임베디드 타입을 사용하기 전과 후에 매핑하는 테이블은 같다. (자료3 참고)</li>
+<li>객체와 테이블을 아주 세밀하게(find-grained) 매핑하는 것이 가능하다.</li>
+<li>잘 설계한 ORM 애플리케이션은 매핑한 테이블의 수 보다 클래스의 수가 더 많음</li>
+</ul>
+<br>
+<p><strong>임베디드 타입과 테이블 매핑</strong></p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2031.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2031.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2031.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2031.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2031.png"
+        title="picture" /></p>
+<ul>
+<li>
+<p>Member Entity는 Address라는 임베디드 타입을 가질 수 있고, Address라는 임베디드 타입 역시 <br> zipcode라는 값 타입을 가질 수 있다.</p>
+</li>
+<li>
+<p>Member Entity는 PhoneNumber라는 임베디드 타입을 가질 수 있고,
+<strong>PhoneNumber라는 임베디드 타입은 PhoneEntity라는 Entity를 가질 수 있다.
+임베디드 타입 클래스 안에서 Column도 사용 가능하다</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Embeddable</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Address</span> <span class="o">{</span>
+<span class="kd">private</span> <span class="n">String</span> <span class="n">city</span><span class="o">;</span>
+<span class="kd">private</span> <span class="n">String</span> <span class="n">street</span><span class="o">;</span>
+
+<span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;ZIPCODE&#34;</span><span class="o">)</span> <span class="c1">// 이것 역시 가능하다.
+</span><span class="c1"></span><span class="kd">private</span> <span class="n">String</span> <span class="n">zipcode</span><span class="o">;</span>
+
+<span class="kd">private</span> <span class="n">Member</span> <span class="n">member</span><span class="o">;</span> <span class="c1">//가능하다.
+</span><span class="c1"></span>
+<span class="kd">public</span> <span class="nf">Address</span><span class="o">()</span> <span class="o">{</span> <span class="o">}</span>
+</code></pre></div></li>
+</ul>
+<br>
+<blockquote>
+<p><strong>@AttributeOverride : 속성 재정의</strong></p>
+</blockquote>
+<br>
+<br>
+<h3 id="member안에-동일한-임베디드-타입이-있다면-어떻게-될까">Member안에 동일한 임베디드 타입이 있다면 어떻게 될까?</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+    <span class="nd">@Id</span> <span class="nd">@GeneratedValue</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;USERNAME&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">name</span><span class="o">;</span>
+    <span class="nd">@Embedded</span>
+    <span class="kd">private</span> <span class="n">Period</span> <span class="n">workPeriod</span><span class="o">;</span>
+
+    <span class="nd">@Embedded</span>
+    <span class="kd">private</span> <span class="n">Address</span> <span class="n">homeAddress</span><span class="o">;</span>
+
+    <span class="c1">//workAddress라는 동일한 homeAddress와 동일한 타입이 추가된다면 어떻게 될까.
+</span><span class="c1"></span>    <span class="nd">@Embedded</span>
+    <span class="kd">private</span> <span class="n">Address</span> <span class="n">workAddress</span><span class="o">;</span>
+    <span class="c1">//error MappingException: Repeated column in mapping for entity
+</span><span class="c1"></span><span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h3 id="attributeoverride-를-사용해서-컬러-명-속성을-재정의-해준다">@AttributeOverride 를 사용해서 컬러 명 속성을 재정의 해준다.</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Embedded</span>
+<span class="nd">@AttributeOverrides</span><span class="o">({</span>
+    <span class="nd">@AttributeOverride</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;city&#34;</span><span class="o">,</span> <span class="n">column</span> <span class="o">=</span> <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;WORK_CITY&#34;</span><span class="o">)),</span>
+    <span class="nd">@AttributeOverride</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;street&#34;</span><span class="o">,</span> <span class="n">column</span> <span class="o">=</span> <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;WORK_STREET&#34;</span><span class="o">)),</span>
+    <span class="nd">@AttributeOverride</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;zipcode&#34;</span><span class="o">,</span> <span class="n">column</span> <span class="o">=</span> <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;WORK_STREET&#34;</span><span class="o">))</span>
+<span class="o">})</span>
+<span class="kd">private</span> <span class="n">Address</span> <span class="n">workAddress</span><span class="o">;</span>
+</code></pre></div><ul>
+<li>위와 같이 @AttributeOverrides를 이용하면 Address의 field명들이 재정의 되어 정상 동작한다.</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="3-값-타입과-불변-객체">3. 값 타입과 불변 객체</h2>
+<hr>
+<h3 id="-값-타입은-복잡한-객체-세상을-조금이라도-단순화-하려고-만든-개념-따라서-값-타입은-단순하고-안전하게-다룰-수-있어야-한다">: <strong>값 타입은 복잡한 객체 세상을 조금이라도 단순화 하려고 만든 개념. 따라서 값 타입은 단순하고 안전하게 다룰 수 있어야 한다.</strong></h3>
+<br>
+<p><strong>값 타입 공유 참조</strong></p>
+<ul>
+<li>임베디드 타입 같은 값 타입을 여러 엔티티에서 공유하면 위험하다.</li>
+</ul>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2032.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2032.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2032.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2032.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2032.png"
+        title="picture" /></p>
+<br>
+<p><strong>시나리오1 - member와 member2가 같은 address를 바라보고 있다.</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Address</span> <span class="n">address</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;city&#34;</span><span class="o">,</span> <span class="s">&#34;street&#34;</span><span class="o">,</span> <span class="s">&#34;10000&#34;</span><span class="o">);</span>
+<span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setUsername</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setHomeAddress</span><span class="o">(</span><span class="n">address</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+<span class="n">Member</span> <span class="n">member2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setUsername</span><span class="o">(</span><span class="s">&#34;member2&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setHomeAddress</span><span class="o">(</span><span class="n">address</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+</code></pre></div><br>
+<p><strong>시나리오2 - 시나리오1에서 member가 주소지를 변경하고 싶어서 Address를 수정한다.</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">member</span><span class="o">.</span><span class="na">getHomeAddress</span><span class="o">().</span><span class="na">setCity</span><span class="o">(</span><span class="s">&#34;newCity&#34;</span><span class="o">);</span>
+</code></pre></div><br>
+<p><strong>SideEffect 발생 - member2의 Address정보까지 바뀌어 버린다.</strong></p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2033.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2033.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2033.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2033.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2033.png"
+        title="picture" /></p>
+<br>
+<p><strong>값 타입 복사</strong></p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2034.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2034.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2034.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2034.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2034.png"
+        title="picture" /></p>
+<p><br> <br></p>
+<h3 id="값인스턴스을-복사해서-사용한다">값(인스턴스)을 복사해서 사용한다.</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Address</span> <span class="n">address</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;city&#34;</span><span class="o">,</span> <span class="s">&#34;street&#34;</span><span class="o">,</span> <span class="s">&#34;10000&#34;</span><span class="o">);</span>
+<span class="n">Address</span> <span class="n">copyAddress</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="n">address</span><span class="o">.</span><span class="na">getCity</span><span class="o">(),</span> 
+                                <span class="n">address</span><span class="o">.</span><span class="na">getStreet</span><span class="o">(),</span> 
+                                <span class="n">address</span><span class="o">.</span><span class="na">getZipcode</span><span class="o">());</span>
+</code></pre></div><br>
+<br>
+<h3 id="누군가-실수로-값-복사가-아닌-기존-값을-넣는다면-막을-수-있을까">누군가 실수로 값 복사가 아닌 기존 값을 넣는다면 막을 수 있을까?</h3>
+<p><strong>객체 타입의 한계</strong></p>
+<ul>
+<li>항상 값을 복사해서 사용하면 공유참조로 인해 발생하는 부작용을 피할 수 있다.</li>
+<li>문제는 임베디드 타입처럼 직접 정의한 값 타입은 자바의 기본타입이 아닌 객체 타입이다.</li>
+<li>자바 기본 타입에 값을 대입하면 값을 복사한다.</li>
+<li><strong>객체 타입은 참조 값을 직접 대입하는 것을 막을 방법이 없다.</strong></li>
+<li><strong>객체의 공유 참조는 피할 수 없다.</strong></li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Address</span> <span class="n">address</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;city&#34;</span><span class="o">,</span> <span class="s">&#34;street&#34;</span><span class="o">,</span> <span class="s">&#34;10000&#34;</span><span class="o">);</span>
+<span class="n">Address</span> <span class="n">copyAddress</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="n">address</span><span class="o">.</span><span class="na">getCity</span><span class="o">(),</span> 
+                                <span class="n">address</span><span class="o">.</span><span class="na">getStreet</span><span class="o">(),</span> 
+                                <span class="n">address</span><span class="o">.</span><span class="na">getZipcode</span><span class="o">());</span>
+<span class="o">...</span>
+<span class="n">member2</span><span class="o">.</span><span class="na">setHomAddress</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">getHomeAddress</span><span class="o">());</span> <span class="c1">//막을 수 없다.
+</span></code></pre></div><ul>
+<li>기본 타입(primitive type)은 <code>=</code>으로 값을 복사한다. <br>
+하지만, 객체 타입에서 <code>=</code> 을 통한 태입은 참조를 전달한다. <br>
+⇒ 인스턴스가 하나이기에 같이 변경된다.</li>
+</ul>
+<br>
+<br>
+<p><strong>불변 객체</strong></p>
+<ul>
+<li>객체 타입을 수정할 수 없도록 <strong>부작용을 원천 차단한다.</strong></li>
+<li>값 타입은 불변 객체(immutable object)로 설계해야 한다.</li>
+<li>불변 객체 : 생성 시점 이후 절대 값을 변경할 수 없는 객체</li>
+<li>생성자로만 값을 수정하고 수정자(Setter)를 만들지 않으면 된다.</li>
+<li>참고: Integer, String은 자바가 제공하는 대표적인 불변 객체</li>
+<li>Example</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">class</span> <span class="nc">Address</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">city</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">street</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">zipcode</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nf">Address</span><span class="o">()</span> <span class="o">{</span>
+    <span class="o">}</span>
+    <span class="kd">public</span> <span class="nf">Address</span><span class="o">(</span><span class="n">String</span> <span class="n">city</span><span class="o">,</span> <span class="n">String</span> <span class="n">street</span><span class="o">,</span> <span class="n">String</span> <span class="n">zipcode</span><span class="o">){</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">city</span> <span class="o">=</span><span class="n">city</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">street</span> <span class="o">=</span><span class="n">street</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">zipcode</span> <span class="o">=</span><span class="n">zipcode</span><span class="o">;</span>
+    <span class="o">}</span>
+    <span class="kd">public</span> <span class="n">String</span> <span class="nf">getCity</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">city</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="n">String</span> <span class="nf">getStreet</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">street</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="n">String</span> <span class="nf">getZipcode</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">zipcode</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kt">void</span> <span class="nf">setCity</span><span class="o">(</span><span class="n">String</span> <span class="n">city</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">city</span> <span class="o">=</span> <span class="n">city</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kt">void</span> <span class="nf">setStreet</span><span class="o">(</span><span class="n">String</span> <span class="n">street</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">street</span> <span class="o">=</span> <span class="n">street</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kt">void</span> <span class="nf">setZipcode</span><span class="o">(</span><span class="n">String</span> <span class="n">zipcode</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">zipcode</span> <span class="o">=</span> <span class="n">zipcode</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>값을 변경해야 하는 경우에는 어떻게 하나요?
+<ul>
+<li>새로 만들어 준다.(ex: city가 바뀌게 된다.)</li>
+</ul>
+</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Address</span> <span class="n">newAddress</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="n">newCity</span><span class="o">,</span> <span class="n">address</span><span class="o">.</span><span class="na">getStreet</span><span class="o">(),</span> <span class="n">address</span><span class="o">.</span><span class="na">getZipCode</span><span class="o">())</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setHomeAddress</span><span class="o">(</span><span class="n">newAddress</span><span class="o">);</span>
+</code></pre></div><br>
+<br>
+<br>
+<h2 id="4-값-타입의-비교">4. 값 타입의 비교</h2>
+<hr>
+<ul>
+<li>값 타입: 인스턴스가 달라도 그 안에 값이 같으면 같은 것으로 봐야 함</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">// primitive type 비교
+</span><span class="c1"></span><span class="kt">int</span> <span class="n">a</span> <span class="o">=</span> <span class="n">10</span><span class="o">;</span> 
+<span class="kt">int</span> <span class="n">b</span> <span class="o">=</span> <span class="n">10</span><span class="o">;</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">b</span><span class="o">);</span> <span class="c1">//true
+</span><span class="c1"></span>
+<span class="c1">// 임베디드 타입(인스턴스) 비교
+</span><span class="c1"></span><span class="n">Address</span> <span class="n">a</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;서울&#34;</span><span class="o">,</span> <span class="s">&#34;AAA&#34;</span><span class="o">,</span> <span class="n">1000</span><span class="o">);</span>
+<span class="n">Address</span> <span class="n">b</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;서울&#34;</span><span class="o">,</span> <span class="s">&#34;AAA&#34;</span><span class="o">,</span> <span class="n">1000</span><span class="o">);</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">a</span> <span class="o">==</span> <span class="n">b</span><span class="o">);</span> <span class="c1">//false
+</span></code></pre></div><p>어째서 임베디드 타입의 <code>==</code> 비교는 false가 뜨는것인가?
+당연하다. 인스턴스가 다르니 다른객체이기 때문이다.</p>
+<br>
+<br>
+<p><em><strong>그럼 어떻게 해야할까?</strong></em></p>
+<ul>
+<li>
+<p>동일설(identity)비교 : 인스턴스의 참조 값을 비교, == 사용</p>
+</li>
+<li>
+<p>동등성(equivalence)비교 : 인스턴스의 값을 비교, equals() 사용</p>
+</li>
+<li>
+<p>값 타입은 a.equals(b)를 사용해서 동등성 비교를 해야 한다.</p>
+</li>
+<li>
+<p>값 타입의 equals()메소드를 적절하게 재정의 해준다.(주로 모든 필드 사용)</p>
+</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Override</span>
+<span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">equals</span><span class="o">(</span><span class="n">Object</span> <span class="n">o</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">if</span> <span class="o">(</span><span class="k">this</span> <span class="o">==</span> <span class="n">o</span><span class="o">)</span> <span class="k">return</span> <span class="kc">true</span><span class="o">;</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">o</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">||</span> <span class="n">getClass</span><span class="o">()</span> <span class="o">!=</span> <span class="n">o</span><span class="o">.</span><span class="na">getClass</span><span class="o">())</span> <span class="k">return</span> <span class="kc">false</span><span class="o">;</span>
+    <span class="n">Address</span> <span class="n">address</span> <span class="o">=</span> <span class="o">(</span><span class="n">Address</span><span class="o">)</span> <span class="n">o</span><span class="o">;</span>
+    <span class="k">return</span> <span class="n">Objects</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="n">city</span><span class="o">,</span> <span class="n">address</span><span class="o">.</span><span class="na">city</span><span class="o">)</span> <span class="o">&amp;&amp;</span>
+            <span class="n">Objects</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="n">street</span><span class="o">,</span> <span class="n">address</span><span class="o">.</span><span class="na">street</span><span class="o">)</span> <span class="o">&amp;&amp;</span>
+            <span class="n">Objects</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="n">zipcode</span><span class="o">,</span> <span class="n">address</span><span class="o">.</span><span class="na">zipcode</span><span class="o">);</span>
+<span class="o">}</span>
+
+<span class="nd">@Override</span>
+<span class="kd">public</span> <span class="kt">int</span> <span class="nf">hashCode</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">Objects</span><span class="o">.</span><span class="na">hash</span><span class="o">(</span><span class="n">city</span><span class="o">,</span> <span class="n">street</span><span class="o">,</span> <span class="n">zipcode</span><span class="o">);</span>
+<span class="o">}</span>
+
+<span class="o">...</span>
+<span class="o">...</span>
+<span class="o">...</span>
+<span class="c1">// 임베디드 타입(인스턴스) 비교
+</span><span class="c1"></span><span class="n">Address</span> <span class="n">a</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;서울&#34;</span><span class="o">,</span> <span class="s">&#34;AAA&#34;</span><span class="o">,</span> <span class="n">1000</span><span class="o">);</span>
+<span class="n">Address</span> <span class="n">b</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;서울&#34;</span><span class="o">,</span> <span class="s">&#34;AAA&#34;</span><span class="o">,</span> <span class="n">1000</span><span class="o">);</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">a</span><span class="o">.</span><span class="na">equals</span><span class="o">(</span><span class="n">b</span><span class="o">));</span><span class="c1">//true 이제 true가 된다.
+</span></code></pre></div><br>
+<br>
+<br>
+<h2 id="5-값-타입-컬렉션">5. 값 타입 컬렉션</h2>
+<hr>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2035.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2035.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2035.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2035.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2035.png"
+        title="picture" /></p>
+<ul>
+<li>값 타입을 하나 이상 저장할 때 사용</li>
+<li>@ElementCollection, @CollectionTable 사용</li>
+<li>데이터베이스는 컬렉션을 같은 테이블에 저장할 수 없다.</li>
+<li>컬렉션을 저장하기 위한 별도의 테이블이 필요하다.</li>
+</ul>
+<br>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@ElementCollection</span>
+<span class="nd">@CollectionTable</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;FAVORITE_FOOD&#34;</span><span class="o">,</span> <span class="n">joinColumns</span> <span class="o">=</span> <span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+<span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;FOOD_NAME&#34;</span><span class="o">)</span>
+<span class="kd">private</span> <span class="n">Set</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">favoriteFoods</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashSet</span><span class="o">&lt;&gt;();</span>
+
+<span class="nd">@ElementCollection</span>
+<span class="nd">@CollectionTable</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;addressHistory&#34;</span><span class="o">,</span> <span class="n">joinColumns</span> <span class="o">=</span> <span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+<span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;ADDRESS&#34;</span><span class="o">)</span>
+<span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Address</span><span class="o">&gt;</span> <span class="n">addressHistory</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;&gt;();</span>
+</code></pre></div><br>
+<br>
+<p><strong>값 타입 컬렉션 사용</strong></p>
+<ul>
+<li>값 타입 조회 예제
+값 타입 컬렉션도 지연 로딩 사용 전략</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">1L</span><span class="o">);</span>
+<span class="cm">/*
+</span><span class="cm">SQL: select MEMBER_ID, street, zipcode, USERNAME from MEMBER 
+</span><span class="cm">            where MEMBER_ID = 1L;
+</span><span class="cm">*/</span>
+</code></pre></div><br>
+<br>
+<ul>
+<li>값 타입 수정 예제</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/*기본적인 임베디드 타입 변경*/</span>
+<span class="n">findMember</span><span class="o">.</span><span class="na">getHomeAddress</span><span class="o">().</span><span class="na">setCity</span><span class="o">(</span><span class="s">&#34;newCity&#34;</span><span class="o">);</span><span class="c1">// 잘못된 수정
+</span><span class="c1"></span>
+<span class="n">Address</span> <span class="n">add</span> <span class="o">=</span> <span class="n">findMember</span><span class="o">.</span><span class="na">getHomeAddress</span><span class="o">();</span>
+<span class="n">findMember</span><span class="o">.</span><span class="na">setHomeAddress</span><span class="o">(</span><span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;newCity&#34;</span><span class="o">,</span> <span class="n">add</span><span class="o">.</span><span class="na">getStreet</span><span class="o">(),</span> <span class="n">add</span><span class="o">.</span><span class="na">getZipcode</span><span class="o">()));</span>
+
+<span class="cm">/*값 타입 컬렉션 수정 예제 - 치킨을 김밥으로 변경*/</span>
+<span class="n">findMember</span><span class="o">.</span><span class="na">getFavoriteFoods</span><span class="o">().</span><span class="na">remove</span><span class="o">(</span><span class="s">&#34;치킨&#34;</span><span class="o">);</span>
+<span class="n">findMember</span><span class="o">.</span><span class="na">getFavoriteFoods</span><span class="o">().</span><span class="na">add</span><span class="o">(</span><span class="s">&#34;김밥&#34;</span><span class="o">);</span>
+
+<span class="n">findMember</span><span class="o">.</span><span class="na">getAddressHistory</span><span class="o">().</span><span class="na">remove</span><span class="o">(</span><span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;old1&#34;</span><span class="o">,</span> <span class="s">&#34;street&#34;</span><span class="o">,</span> <span class="s">&#34;10000&#34;</span><span class="o">));</span>
+<span class="n">findMember</span><span class="o">.</span><span class="na">getAddressHistory</span><span class="o">().</span><span class="na">add</span><span class="o">(</span><span class="k">new</span> <span class="n">Address</span><span class="o">(</span><span class="s">&#34;newCity&#34;</span><span class="o">,</span> <span class="s">&#34;street&#34;</span><span class="o">,</span> <span class="s">&#34;10000&#34;</span><span class="o">));</span>
+</code></pre></div><p>값 타입 컬렉션은 생명주기를 소유객체에 의존한다.</p>
+<ul>
+<li>여기서 값 타입 컬렉션 실행 쿼리를 보면 기존 데이터만 삭제하고 신규 데이터를 추가하는 것이 아닌 <br> 값 타입 컬렉션 데이터 전체가 갈아끼워진다.</li>
+<li><strong>참고:</strong> 값 타입 컬렉션은 영송석 전이(CASCADE)와 고아 객체 제거 기능을 필수로 가진다고 볼 수 있다.</li>
+</ul>
+<br>
+<p><strong>값 타입 컬렉션의 제약사항</strong></p>
+<ul>
+<li>값 타입은 엔티티와 다르게 식별자 개념이 없다.</li>
+<li>값은 변경하면 추적이 어렵다.</li>
+<li>값 타입 컬렉션에서 변경 사항이 발생하면, 주인 엔티티와 연관된 모든 데이터를 삭제하고 값 타입 컬렉션에 있는 <br> 현재 값 모두 다시 저장한다.</li>
+<li>값 타입 컬렉션을 매핑하는 테이블은 모든 컬럼을 묶어서 기본키를 구성해야한다.
+(null 입력x, 중복 저장x)</li>
+<li><strong>이러한 이유로 실무에선 사용 안하는 걸 추천한다.</strong>
+<ul>
+<li>실무에서는 상황에 따라 값 타입 컬렉션 대신 일대다 관계를 고려한다.</li>
+<li>일대다 관계를 위한 엔티티를 만들고, 여기에서 값 타입을 사용</li>
+<li>영속성 전이(CASCADE)+ 고아 객체 제거를 사용해서 값 타입 컬렉션처럼 사용</li>
+</ul>
+</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@OneToMany</span><span class="o">(</span><span class="n">cascade</span> <span class="o">=</span> <span class="n">CascadeType</span><span class="o">.</span><span class="na">ALL</span><span class="o">,</span> <span class="n">orphanRemoval</span> <span class="o">=</span> <span class="kc">true</span><span class="o">)</span>
+<span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+<span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">AddressEntity</span><span class="o">&gt;</span> <span class="n">addressHistory</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;&gt;();</span>
+</code></pre></div><br>
+<dl>
+<dt><strong>값 타입 컬렉션 사용 시기</strong></dt>
+<dd>
+<p>정말 단순한 경우 <br>
+<strong>Ex</strong>: 좋아하는 음식메뉴 다중 선태과 같이 심플한 자료들</p>
+</dd>
+</dl>
+<br>
+<br>
+<h3 id="정리">정리</h3>
+<ol>
+<li>엔티티 타입의 특징
+<ul>
+<li>식별자가 있다.</li>
+<li>생명 주기 관리 (값 타입은 생명주기 관리를 주도적으로 할 수 없다.)</li>
+<li>공유</li>
+</ul>
+</li>
+<li>값 타입의 특징
+<ul>
+<li>식별자가 없다.</li>
+<li>생명 주기를 엔티티에 의존</li>
+<li>공유하지 않는 것이 안전(복사해서 사용)</li>
+<li>불변 객체로 만드는 것이 안전</li>
+</ul>
+</li>
+</ol>
+<br>
+<h3 id="식별자가-필요하고-지속해서값을추적-변경해야한다면-그것은값타입이아닌엔티티">식별자가 필요하고, 지속해서값을추적, 변경해야한다면 그것은값타입이아닌엔티티</h3>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-29</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/jpa-value-type/" data-title="값 타입" data-hashtags="JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/jpa-value-type/" data-hashtag="JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/jpa-value-type/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/jpa-value-type/" data-title="값 타입" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/jpa-proxy-and-management/" class="prev" rel="prev" title="프록시와 연관관계 관리"><i class="fas fa-angle-left fa-fw"></i>프록시와 연관관계 관리</a>
+            <a href="/posts/jpa-object-query-language1/" class="next" rel="next" title="객체지향 쿼리 언어 - 기본 문법">객체지향 쿼리 언어 - 기본 문법<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

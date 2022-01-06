@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>고급 매핑 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="고급 매핑" />
+<meta property="og:description" content="1. 상속관계 매핑   관계형 데이터베이스는 상속 관계X 슈퍼타입 서브타입 관계라는 모델링 기법이 객체 상속과 유사 상속관계 매핑 : 객체의 상속과 구조와 DB의 슈퍼타입 서브타입 관계를 매핑  Album, Movie, Book은 모두 id, name, price를 가지고 있다(공통 변수)
+슈퍼타입 서브타입 논리 모델을 실제 물리 모델로 구현하는 방법 1. 조인전략  Item, Album에 PK,FK가 같아 각각의 테이블에 insert가 수행하고 Item내에 타입을 구분하는 컬럼을 만들어서 구해온다. 장점  정규화도 되어있고, 제약조건을 부모에 걸어 맞출 수 있다.  ex: Order 테이블에서 특정 아이템(영화)의 가격을 볼 때 ITEM 테이블만 봐도 된다.   저장공간 효율화   단점  조회시 조인이 많을 경우 성능 저하 조회 쿼리가 복잡함 데이터 저장시 INSERT SQL 2번 호출(큰 문제는 아님)   조인이 많아도 조건이 잘 걸려있을 경우 성능 하락이 크지 않고 저장공간이 효율적으로 되기에 오히려 더 좋을 수 있다는 점을 고려해야 한다.  2. 단일 테이블 전략 (default)  논리모델을 한 테이블로 합쳐버리는 방법 한 테이블에 다 넣어 놓고 어떤 테이블인지 구분하는 컬럼(ex:DTYPE)을 통해 구분한다. 테이블은 ITEM 테이블 하나만 관리된다. 성능에서 우위를 가질 수 있다. (select or insert가 한번에 수행으로 된다.) @DiscriminatorColumn 이 필수로 들어간다(기입하지 않아도 자동으로 들어감) 장점  조인이 필요 없기에 일반적으로 조회 성능이 빠름 조회 쿼리가 단순함   단점  자식 엔티티가 매핑한 컬럼은 모두 nullable 해야 한다. 단일 테이블에 모든 것을 저장하기에 테이블이 커질 수 있고 상황에 따라서 조회성능이 더 느려질 수 있다. (임계점을 넘을 저도의 상황은 거의 오지 않는다.)    3. 구현 클래스마다 테이블 전략  각각의 테이블마다 별개로 만들어서 따로 관리 ITEM 테이블을 생성하지 않고 ALBUM, MOVIE, BOOK 테이블에서 각각 id, name, price 필드를 가지고 있다. @DiscriminatorColumn을 사용할 수 없다. (구분할 이유가 없다.) ITEM을 조회하면 ALBUM, MOVIE, BOOK 세개의 테이블을 UNION ALL으로 전부 조회해서 가져온다. (단점) 추천하지 않는 전략 (개발자, DBA 양측에서) 장점  서브 타입을 명확하게 구분해서 처리할 때 효과적 Not Null 제약조건 가능   단점  여러 자식 테이블을 함께 조회할 때 성능이 느림 (UNION SQL) 자식 테이블을 통합해서 쿼리하기 힘듬    2. 주요 어노테이션 @Inheritance(strategy = InheritanceType.XXX)
+ JOINED : 조인전략 SINGLE_TABLE : 단일 테이블 전략 TABLE_PER_CLASS : 구현 클래스마다 테이블 전략  @DiscriminatorColumn(name = &ldquo;DTYPE&rdquo;)
+ default : DTYPE 이라는 Column이 super class의 table에 생기고, DTYPE의 값은 sub class의 이름으로 지정된다. SingleTable 전략에서 없어도 DTYPE이 생성되기도 하는데, 그래도 운영상 써주자. 이 어노테이션은 상위 클래스(Item)에서 명시된다. 데이터베이스의 상위 테이블(Item 테이블)에게 구분자 역할을 DTYPE 칼럼을 넣어준다. 애노테이션의 name 속성으로 컬럼명을 바꿔줄 수 있다 (이름속성으로 쓰자).  @DiscriminatorValue(“XXX”)
+ 이 어노테이션은 하위 클래스(ALBUM, MOVIE, BOOK)에서 사용된다. 상위 테이블(ITEM 테이블)을 조회할때 DTYPE 칼럼에 사용되는 value를 설정해주는 기능이다. 애노테이션을 사용하지 않을 경우 기본 Default 값인 Entity 이름으로 value값이 채워지게 된다. default: classname  3. @MappedSuperclass   공통 매핑 정보가 필요할 때 사용(id, name)  ex: 모든 테이블에 row 생성일, 수정일을 등록해야하는 경우(createdAt, updatedAt)     상속관계 매핑이 아니다. 엔티티도 아니고, 테이블과 매핑되지도 않는다. 부모 클래스를 상속받는 자식 클래스에 매핑 정보만 제공 부모타입으로 조회, 검색 불가 직접 생성해서 사용할 일이 없으므로 추상클래스 추천  @Entity클래스는 엔티티나 @MappedSuperclass로 지정한 클래스만 상속 가능
+@MappedSuperclass public abstract class BaseEntity { private String createdBy; private LocalDateTime createdDate; private String modifiedBy; private LocalDateTime lastModifiedDate; } @Entity public class Member extends BaseEntity { } @Entity public class Team extends BaseEntity { } Member member = new Member(); member." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/jpa-advanced-mapping/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-29T13:20:00+00:00" />
+<meta property="article:modified_time" content="2021-12-29T13:20:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="고급 매핑"/>
+<meta name="twitter:description" content="1. 상속관계 매핑   관계형 데이터베이스는 상속 관계X 슈퍼타입 서브타입 관계라는 모델링 기법이 객체 상속과 유사 상속관계 매핑 : 객체의 상속과 구조와 DB의 슈퍼타입 서브타입 관계를 매핑  Album, Movie, Book은 모두 id, name, price를 가지고 있다(공통 변수)
+슈퍼타입 서브타입 논리 모델을 실제 물리 모델로 구현하는 방법 1. 조인전략  Item, Album에 PK,FK가 같아 각각의 테이블에 insert가 수행하고 Item내에 타입을 구분하는 컬럼을 만들어서 구해온다. 장점  정규화도 되어있고, 제약조건을 부모에 걸어 맞출 수 있다.  ex: Order 테이블에서 특정 아이템(영화)의 가격을 볼 때 ITEM 테이블만 봐도 된다.   저장공간 효율화   단점  조회시 조인이 많을 경우 성능 저하 조회 쿼리가 복잡함 데이터 저장시 INSERT SQL 2번 호출(큰 문제는 아님)   조인이 많아도 조건이 잘 걸려있을 경우 성능 하락이 크지 않고 저장공간이 효율적으로 되기에 오히려 더 좋을 수 있다는 점을 고려해야 한다.  2. 단일 테이블 전략 (default)  논리모델을 한 테이블로 합쳐버리는 방법 한 테이블에 다 넣어 놓고 어떤 테이블인지 구분하는 컬럼(ex:DTYPE)을 통해 구분한다. 테이블은 ITEM 테이블 하나만 관리된다. 성능에서 우위를 가질 수 있다. (select or insert가 한번에 수행으로 된다.) @DiscriminatorColumn 이 필수로 들어간다(기입하지 않아도 자동으로 들어감) 장점  조인이 필요 없기에 일반적으로 조회 성능이 빠름 조회 쿼리가 단순함   단점  자식 엔티티가 매핑한 컬럼은 모두 nullable 해야 한다. 단일 테이블에 모든 것을 저장하기에 테이블이 커질 수 있고 상황에 따라서 조회성능이 더 느려질 수 있다. (임계점을 넘을 저도의 상황은 거의 오지 않는다.)    3. 구현 클래스마다 테이블 전략  각각의 테이블마다 별개로 만들어서 따로 관리 ITEM 테이블을 생성하지 않고 ALBUM, MOVIE, BOOK 테이블에서 각각 id, name, price 필드를 가지고 있다. @DiscriminatorColumn을 사용할 수 없다. (구분할 이유가 없다.) ITEM을 조회하면 ALBUM, MOVIE, BOOK 세개의 테이블을 UNION ALL으로 전부 조회해서 가져온다. (단점) 추천하지 않는 전략 (개발자, DBA 양측에서) 장점  서브 타입을 명확하게 구분해서 처리할 때 효과적 Not Null 제약조건 가능   단점  여러 자식 테이블을 함께 조회할 때 성능이 느림 (UNION SQL) 자식 테이블을 통합해서 쿼리하기 힘듬    2. 주요 어노테이션 @Inheritance(strategy = InheritanceType.XXX)
+ JOINED : 조인전략 SINGLE_TABLE : 단일 테이블 전략 TABLE_PER_CLASS : 구현 클래스마다 테이블 전략  @DiscriminatorColumn(name = &ldquo;DTYPE&rdquo;)
+ default : DTYPE 이라는 Column이 super class의 table에 생기고, DTYPE의 값은 sub class의 이름으로 지정된다. SingleTable 전략에서 없어도 DTYPE이 생성되기도 하는데, 그래도 운영상 써주자. 이 어노테이션은 상위 클래스(Item)에서 명시된다. 데이터베이스의 상위 테이블(Item 테이블)에게 구분자 역할을 DTYPE 칼럼을 넣어준다. 애노테이션의 name 속성으로 컬럼명을 바꿔줄 수 있다 (이름속성으로 쓰자).  @DiscriminatorValue(“XXX”)
+ 이 어노테이션은 하위 클래스(ALBUM, MOVIE, BOOK)에서 사용된다. 상위 테이블(ITEM 테이블)을 조회할때 DTYPE 칼럼에 사용되는 value를 설정해주는 기능이다. 애노테이션을 사용하지 않을 경우 기본 Default 값인 Entity 이름으로 value값이 채워지게 된다. default: classname  3. @MappedSuperclass   공통 매핑 정보가 필요할 때 사용(id, name)  ex: 모든 테이블에 row 생성일, 수정일을 등록해야하는 경우(createdAt, updatedAt)     상속관계 매핑이 아니다. 엔티티도 아니고, 테이블과 매핑되지도 않는다. 부모 클래스를 상속받는 자식 클래스에 매핑 정보만 제공 부모타입으로 조회, 검색 불가 직접 생성해서 사용할 일이 없으므로 추상클래스 추천  @Entity클래스는 엔티티나 @MappedSuperclass로 지정한 클래스만 상속 가능
+@MappedSuperclass public abstract class BaseEntity { private String createdBy; private LocalDateTime createdDate; private String modifiedBy; private LocalDateTime lastModifiedDate; } @Entity public class Member extends BaseEntity { } @Entity public class Team extends BaseEntity { } Member member = new Member(); member."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/jpa-advanced-mapping/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/" /><link rel="next" href="https://jaeyeonme.github.io/posts/jpa-proxy-and-management/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "고급 매핑",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/jpa-advanced-mapping\/"
+        },"genre": "posts","keywords": "JPA, Hibernate","wordcount":  531 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/jpa-advanced-mapping\/","datePublished": "2021-12-29T13:20:00+00:00","dateModified": "2021-12-29T13:20:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">고급 매핑</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-29">2021-12-29</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;531 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;3 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-상속관계-매핑">1. 상속관계 매핑</a>
+      <ul>
+        <li><a href="#슈퍼타입-서브타입-논리-모델을-실제-물리-모델로-구현하는-방법">슈퍼타입 서브타입 논리 모델을 실제 물리 모델로 구현하는 방법</a></li>
+        <li><a href="#1-조인전략">1. 조인전략</a></li>
+        <li><a href="#2-단일-테이블-전략-default">2. 단일 테이블 전략 (default)</a></li>
+        <li><a href="#3-구현-클래스마다-테이블-전략">3. 구현 클래스마다 테이블 전략</a></li>
+      </ul>
+    </li>
+    <li><a href="#2-주요-어노테이션">2. 주요 어노테이션</a></li>
+    <li><a href="#3-mappedsuperclass">3. @MappedSuperclass</a></li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-상속관계-매핑">1. 상속관계 매핑</h2>
+<hr>
+<ul>
+<li>관계형 데이터베이스는 상속 관계X</li>
+<li>슈퍼타입 서브타입 관계라는 모델링 기법이 객체 상속과 유사</li>
+<li>상속관계 매핑 : 객체의 상속과 구조와 DB의 슈퍼타입 서브타입 관계를 매핑</li>
+</ul>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2017.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2017.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2017.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2017.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2017.png"
+        title="image" /></p>
+<p>Album, Movie, Book은 모두 <code>id</code>, <code>name</code>, <code>price</code>를 가지고 있다(공통 변수)</p>
+<br>
+<br>
+<h3 id="슈퍼타입-서브타입-논리-모델을-실제-물리-모델로-구현하는-방법">슈퍼타입 서브타입 논리 모델을 실제 물리 모델로 구현하는 방법</h3>
+<h3 id="1-조인전략">1. 조인전략</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2018.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2018.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2018.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2018.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2018.png"
+        title="image" /></p>
+<ul>
+<li>Item, Album에 PK,FK가 같아 각각의 테이블에 insert가 수행하고 Item내에 타입을 구분하는 컬럼을 만들어서 구해온다.</li>
+<li>장점
+<ul>
+<li>정규화도 되어있고, 제약조건을 부모에 걸어 맞출 수 있다.
+<ul>
+<li>ex: Order 테이블에서 특정 아이템(영화)의 가격을 볼 때 ITEM 테이블만 봐도 된다.</li>
+</ul>
+</li>
+<li>저장공간 효율화</li>
+</ul>
+</li>
+<li>단점
+<ul>
+<li>조회시 조인이 많을 경우 성능 저하</li>
+<li>조회 쿼리가 복잡함</li>
+<li>데이터 저장시 INSERT SQL 2번 호출(큰 문제는 아님)</li>
+</ul>
+</li>
+<li>조인이 많아도 조건이 잘 걸려있을 경우 성능 하락이 크지 않고 저장공간이 효율적으로 되기에 오히려 <br> 더 좋을 수 있다는 점을 고려해야 한다.</li>
+</ul>
+<br>
+<br>
+<h3 id="2-단일-테이블-전략-default">2. 단일 테이블 전략 (default)</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2019.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2019.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2019.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2019.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2019.png"
+        title="image" /></p>
+<ul>
+<li>논리모델을 한 테이블로 합쳐버리는 방법</li>
+<li>한 테이블에 다 넣어 놓고 어떤 테이블인지 구분하는 컬럼(ex:DTYPE)을 통해 구분한다.</li>
+<li>테이블은 ITEM 테이블 하나만 관리된다.</li>
+<li>성능에서 우위를 가질 수 있다. (select or insert가 한번에 수행으로 된다.)</li>
+<li>@DiscriminatorColumn 이 필수로 들어간다(기입하지 않아도 자동으로 들어감)</li>
+<li>장점
+<ul>
+<li>조인이 필요 없기에 일반적으로 조회 성능이 빠름</li>
+<li>조회 쿼리가 단순함</li>
+</ul>
+</li>
+<li>단점
+<ul>
+<li>자식 엔티티가 매핑한 컬럼은 모두 nullable 해야 한다.</li>
+<li>단일 테이블에 모든 것을 저장하기에 테이블이 커질 수 있고 상황에 따라서
+조회성능이 더 느려질 수 있다. <br>
+(임계점을 넘을 저도의 상황은 거의 오지 않는다.)</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="3-구현-클래스마다-테이블-전략">3. 구현 클래스마다 테이블 전략</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2020.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2020.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2020.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2020.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2020.png"
+        title="image" /></p>
+<ul>
+<li>각각의 테이블마다 별개로 만들어서 따로 관리</li>
+<li>ITEM 테이블을 생성하지 않고 ALBUM, MOVIE, BOOK 테이블에서 각각 id, name, price 필드를 가지고 있다.</li>
+<li>@DiscriminatorColumn을 사용할 수 없다. (구분할 이유가 없다.)</li>
+<li>ITEM을 조회하면 ALBUM, MOVIE, BOOK 세개의 테이블을 UNION ALL으로 전부 조회해서 가져온다. (단점)</li>
+<li>추천하지 않는 전략 (개발자, DBA 양측에서)</li>
+<li>장점
+<ul>
+<li>서브 타입을 명확하게 구분해서 처리할 때 효과적</li>
+<li>Not Null 제약조건 가능</li>
+</ul>
+</li>
+<li>단점
+<ul>
+<li>여러 자식 테이블을 함께 조회할 때 성능이 느림 (UNION SQL)</li>
+<li>자식 테이블을 통합해서 쿼리하기 힘듬</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<h2 id="2-주요-어노테이션">2. 주요 어노테이션</h2>
+<p><strong>@Inheritance(strategy = InheritanceType.XXX)</strong></p>
+<ul>
+<li>JOINED : 조인전략</li>
+<li>SINGLE_TABLE : 단일 테이블 전략</li>
+<li>TABLE_PER_CLASS : 구현 클래스마다 테이블 전략</li>
+</ul>
+<br>
+<p><strong>@DiscriminatorColumn(name = &ldquo;DTYPE&rdquo;)</strong></p>
+<ul>
+<li>default : DTYPE 이라는 Column이 super class의 table에 생기고,
+DTYPE의 값은 sub class의 이름으로 지정된다.</li>
+<li>SingleTable 전략에서 없어도 DTYPE이 생성되기도 하는데, 그래도 운영상 써주자.</li>
+<li>이 어노테이션은 상위 클래스(Item)에서 명시된다. 데이터베이스의 상위 테이블(Item 테이블)에게 <br> 구분자 역할을 DTYPE 칼럼을 넣어준다. 애노테이션의 name 속성으로 컬럼명을 바꿔줄 수 있다 (이름속성으로 쓰자).</li>
+</ul>
+<br>
+<p><strong>@DiscriminatorValue(“XXX”)</strong></p>
+<ul>
+<li>이 어노테이션은 하위 클래스(ALBUM, MOVIE, BOOK)에서 사용된다. 상위 테이블(ITEM 테이블)을 조회할때 <br> DTYPE 칼럼에 사용되는 value를 설정해주는 기능이다. 애노테이션을 사용하지 않을 경우 기본 Default 값인 Entity <br> 이름으로 value값이 채워지게 된다.</li>
+<li>default: classname</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="3-mappedsuperclass">3. @MappedSuperclass</h2>
+<hr>
+<ul>
+<li>공통 매핑 정보가 필요할 때 사용(id, name)
+<ul>
+<li>ex: 모든 테이블에 row 생성일, 수정일을 등록해야하는 경우(createdAt, updatedAt)</li>
+</ul>
+</li>
+</ul>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png"
+        title="image" /></p>
+<ul>
+<li>상속관계 매핑이 아니다.</li>
+<li>엔티티도 아니고, 테이블과 매핑되지도 않는다.</li>
+<li>부모 클래스를 상속받는 자식 클래스에 매핑 정보만 제공</li>
+<li>부모타입으로 조회, 검색 불가</li>
+<li>직접 생성해서 사용할 일이 없으므로 추상클래스 추천</li>
+</ul>
+<br>
+<p><strong>@Entity클래스는 엔티티나 @MappedSuperclass로 지정한 클래스만 상속 가능</strong></p>
+<br>
+<br>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@MappedSuperclass</span>
+<span class="kd">public</span> <span class="kd">abstract</span> <span class="kd">class</span> <span class="nc">BaseEntity</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">createdBy</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">createdDate</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">modifiedBy</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">lastModifiedDate</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="kd">extends</span> <span class="n">BaseEntity</span> <span class="o">{</span> <span class="o">}</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Team</span> <span class="kd">extends</span> <span class="n">BaseEntity</span> <span class="o">{</span> <span class="o">}</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setUsername</span><span class="o">(</span><span class="s">&#34;user1&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setCreatedBy</span><span class="o">(</span><span class="s">&#34;kim&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setCreatedDate</span><span class="o">(</span><span class="n">LocalDateTime</span><span class="o">.</span><span class="na">now</span><span class="o">());</span>
+
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+<span class="n">em</span><span class="o">.</span><span class="na">flush</span><span class="o">();</span>
+<span class="n">em</span><span class="o">.</span><span class="na">clear</span><span class="o">();</span>
+
+<span class="n">tx</span><span class="o">.</span><span class="na">commit</span><span class="o">();</span>
+</code></pre></div><br>
+<p><strong>JPA Auditing을 적용할 때도 사용되는 어노테이션이다.</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Getter</span>
+<span class="nd">@MappedSupperclass</span>
+<span class="nd">@EntityListeners</span><span class="o">(</span><span class="n">AuditingEntityListener</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+<span class="kd">public</span> <span class="kd">abstract</span> <span class="kd">class</span> <span class="nc">BaseTimeEntity</span> <span class="o">{</span>
+
+    <span class="nd">@CreatedDate</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">createdAt</span><span class="o">;</span>
+
+    <span class="nd">@LastModifiedDate</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">updatedAt</span><span class="o">;</span>
+
+<span class="o">}</span>
+
+<span class="nd">@Getter</span>
+<span class="nd">@NoArgsConstructor</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Book</span> <span class="kd">extends</span> <span class="n">BaseTimeEneity</span> <span class="o">{</span>
+
+    <span class="c1">// craetedAt, updatedAt 필드를 명시하지 않아도 된다.
+</span><span class="c1"></span><span class="o">}</span>
+</code></pre></div><br>
+<br>
+<br>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-29</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/jpa-advanced-mapping/" data-title="고급 매핑" data-hashtags="JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/jpa-advanced-mapping/" data-hashtag="JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/jpa-advanced-mapping/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/jpa-advanced-mapping/" data-title="고급 매핑" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/jpa-mapping-various-associations/" class="prev" rel="prev" title="다양한 연관관계 매핑"><i class="fas fa-angle-left fa-fw"></i>다양한 연관관계 매핑</a>
+            <a href="/posts/jpa-proxy-and-management/" class="next" rel="next" title="프록시와 연관관계 관리">프록시와 연관관계 관리<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

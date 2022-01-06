@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>연관관계 매핑 기초 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="연관관계 매핑 기초" />
+<meta property="og:description" content="1. 연관관계의 필요성  : 객체지향 설계의 목표는 자율적인 객체들의 협력 공동체를 만드는 것이다.
+2. 객체를 테이블에 맞춰 데이터 중심으로 모델링하면, 협력 관계를 만들 수 없다. 2-1. 객체를 테이블에 맞추어 모델링(연관관계가 없는 객체)   객체를 테이블에 맞추어 모델링 (참조 대신에 외래 키를 그대로 사용)
+/* 회원(Member) 엔티티*/ @Entity public class Member { @Id @GeneratedValue private Long id; @Column(name = &#34;USERNAME&#34;) private String name; @Column(name = &#34;TEAM_ID&#34;) private Long teamId; } /* 팀(Team) 엔티티 */ @Entity public class Team{ @Id @GeneratedValue private Long id; private String name; }  객체를 위와 같이 테이블에 맞춰 모델링을 할 경우 생기는 문제는 무엇일까?      객체를 테이블에 맞춰 모델링 했을 경우 DB에 저장&amp;조회하는 로직
+/* 팀과 멤버를 저장하는 로직 */ Team team = new Team(); team.setName(&#34;teamA&#34;); em.persist(team); Member member = new Member(); member.setName(&#34;mamber1&#34;); member.setTeamId(team.getId()); em.persist(member);  외래키 식별자를 직접다루고 있는데, 이럴 경우 문제는? → 조회할 때 역시 해당 외래키를 가지고 조인 쿼리를 직접 짜야 한다. Q. member1 이 소속된 팀 정보를 조회하려면 어떻게 해야하는가?  Member findMember = em.find(Member.class, member.getId()); Long findTeamId = findMember.getTeamId(); Team findTeam = em.find(Team.class, findTeamId);  매번 member를 우선 조회한 뒤 외래키를 뽑아 그것으로 팀의 정보를 조회해야 한다. → 협력관계를 만들 수 없다.    Hibernate: create table Member ( MEMBER_ID bigint not null, TEAM_ID bigint, USERNAME varchar(255), primary key (MEMBER_ID) ) Hibernate: create table Team ( TEAM_ID bigint not null, name varchar(255), primary key (TEAM_ID) )  결론: 외래키를 직접 관리하는 테이블에 맞춘 객체 모델링은 객체간의 협력관계를 만들 수 없고, 객체가 참조를 통해 연관객체를 찾는 다는 사상을 적용할 수 없다. 이 말은 객체지향 프로그래밍의 패러다임을 정면으로 반박하는 것.
+  객체 지향 모델링 (객체 연관관계 사용)
+   객체 지향적으로 엔티티 설계(객체 연관관계 사용)
+/* 회원(Member) 엔티티*/ @Entity public class Member { @Id @GeneratedValue private Long id; @Column(name = &#34;USERNAME&#34;) private String name; @ManyToOne @JoinColumn(name = &#34;team_id&#34;) private Team team; ... getter, setter }  @ManyToOne @JoinColumn 을 통해 멤버(Member)에서 팀(Team)을 참조하도록 헀다.    Team team = new Team(); team.setName(&#34;teamA&#34;); em.persist(team); Member member = new Member(); member.setName(&#34;mamber1&#34;); member.setTeam(team); em.persist(member); em.flush(); em.clear(); Member findMember = em.find(Member.class, member.getId()); Team findTeam = member.getTeam(); 
+3. 양방향 연관관계와 연관관계 주인1 - 기본    단방향에서 양방향이 된다는 것의 의미는 양측에서 서로 참조할 수 있다는 것이다. 기존 단방향에서는 Member 에서 getTeam()을 통해 Team 엔티티를 참조할 수 있지만 Team 에서는 Member 를 참조할 수 없었다. 하지만 테이블 연관관계에서는 외래키를 가지고 양측에서 서로를 참조할 수 있다.
+  Team 객체에 members라는 List를 추가해서 양방향 연관관계를 만들어준다.
+@Entity public class Team{ ... @OneToMany(mappedBy = &#34;team&#34;) private List&lt;Member&gt; members = new ArrayList&lt;&gt;(); ... }     추가한 members 를 확인하는 코드를 작성해보자.
+Member findMember = em.find(Member.class, member.getId()); List&lt;Member&gt; members = findMember.getTeam().getMembers(); for (Member member1 : members) { System.out.println(&#34;member1.getName() = &#34; &#43; member1.getName()); // member1.getName() = mamber1 }  이제 반대방향으로도 객체 그래프 탐색이 가능해졌다.    연관관계의 주인과 mappedBy  mappedBy = 연관관계의 개념에 대해 이해를 어렵게 만드는 주범! 객체와 테이블간 연관관계를 맺는 차이를 이해해야 한다.  객체와 테이블이 관계를 맺는 차이란?  객체 연관관계 = 2개  회원 → 팀 연관관계 1개(단방향) 팀 → 회원 연관관계 1개(단방향)   테이블 연관관계 = 1개  회원 ←→ 팀의 연관관계 1개(양방향)    결국 양방향 관계란  객체의 양방향 관계는 사실 양방향 관계가 아니라 서로 다른 단방향 관계 2개다." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/jpa-mapping-basics/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-29T12:50:00+00:00" />
+<meta property="article:modified_time" content="2021-12-29T12:50:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="연관관계 매핑 기초"/>
+<meta name="twitter:description" content="1. 연관관계의 필요성  : 객체지향 설계의 목표는 자율적인 객체들의 협력 공동체를 만드는 것이다.
+2. 객체를 테이블에 맞춰 데이터 중심으로 모델링하면, 협력 관계를 만들 수 없다. 2-1. 객체를 테이블에 맞추어 모델링(연관관계가 없는 객체)   객체를 테이블에 맞추어 모델링 (참조 대신에 외래 키를 그대로 사용)
+/* 회원(Member) 엔티티*/ @Entity public class Member { @Id @GeneratedValue private Long id; @Column(name = &#34;USERNAME&#34;) private String name; @Column(name = &#34;TEAM_ID&#34;) private Long teamId; } /* 팀(Team) 엔티티 */ @Entity public class Team{ @Id @GeneratedValue private Long id; private String name; }  객체를 위와 같이 테이블에 맞춰 모델링을 할 경우 생기는 문제는 무엇일까?      객체를 테이블에 맞춰 모델링 했을 경우 DB에 저장&amp;조회하는 로직
+/* 팀과 멤버를 저장하는 로직 */ Team team = new Team(); team.setName(&#34;teamA&#34;); em.persist(team); Member member = new Member(); member.setName(&#34;mamber1&#34;); member.setTeamId(team.getId()); em.persist(member);  외래키 식별자를 직접다루고 있는데, 이럴 경우 문제는? → 조회할 때 역시 해당 외래키를 가지고 조인 쿼리를 직접 짜야 한다. Q. member1 이 소속된 팀 정보를 조회하려면 어떻게 해야하는가?  Member findMember = em.find(Member.class, member.getId()); Long findTeamId = findMember.getTeamId(); Team findTeam = em.find(Team.class, findTeamId);  매번 member를 우선 조회한 뒤 외래키를 뽑아 그것으로 팀의 정보를 조회해야 한다. → 협력관계를 만들 수 없다.    Hibernate: create table Member ( MEMBER_ID bigint not null, TEAM_ID bigint, USERNAME varchar(255), primary key (MEMBER_ID) ) Hibernate: create table Team ( TEAM_ID bigint not null, name varchar(255), primary key (TEAM_ID) )  결론: 외래키를 직접 관리하는 테이블에 맞춘 객체 모델링은 객체간의 협력관계를 만들 수 없고, 객체가 참조를 통해 연관객체를 찾는 다는 사상을 적용할 수 없다. 이 말은 객체지향 프로그래밍의 패러다임을 정면으로 반박하는 것.
+  객체 지향 모델링 (객체 연관관계 사용)
+   객체 지향적으로 엔티티 설계(객체 연관관계 사용)
+/* 회원(Member) 엔티티*/ @Entity public class Member { @Id @GeneratedValue private Long id; @Column(name = &#34;USERNAME&#34;) private String name; @ManyToOne @JoinColumn(name = &#34;team_id&#34;) private Team team; ... getter, setter }  @ManyToOne @JoinColumn 을 통해 멤버(Member)에서 팀(Team)을 참조하도록 헀다.    Team team = new Team(); team.setName(&#34;teamA&#34;); em.persist(team); Member member = new Member(); member.setName(&#34;mamber1&#34;); member.setTeam(team); em.persist(member); em.flush(); em.clear(); Member findMember = em.find(Member.class, member.getId()); Team findTeam = member.getTeam(); 
+3. 양방향 연관관계와 연관관계 주인1 - 기본    단방향에서 양방향이 된다는 것의 의미는 양측에서 서로 참조할 수 있다는 것이다. 기존 단방향에서는 Member 에서 getTeam()을 통해 Team 엔티티를 참조할 수 있지만 Team 에서는 Member 를 참조할 수 없었다. 하지만 테이블 연관관계에서는 외래키를 가지고 양측에서 서로를 참조할 수 있다.
+  Team 객체에 members라는 List를 추가해서 양방향 연관관계를 만들어준다.
+@Entity public class Team{ ... @OneToMany(mappedBy = &#34;team&#34;) private List&lt;Member&gt; members = new ArrayList&lt;&gt;(); ... }     추가한 members 를 확인하는 코드를 작성해보자.
+Member findMember = em.find(Member.class, member.getId()); List&lt;Member&gt; members = findMember.getTeam().getMembers(); for (Member member1 : members) { System.out.println(&#34;member1.getName() = &#34; &#43; member1.getName()); // member1.getName() = mamber1 }  이제 반대방향으로도 객체 그래프 탐색이 가능해졌다.    연관관계의 주인과 mappedBy  mappedBy = 연관관계의 개념에 대해 이해를 어렵게 만드는 주범! 객체와 테이블간 연관관계를 맺는 차이를 이해해야 한다.  객체와 테이블이 관계를 맺는 차이란?  객체 연관관계 = 2개  회원 → 팀 연관관계 1개(단방향) 팀 → 회원 연관관계 1개(단방향)   테이블 연관관계 = 1개  회원 ←→ 팀의 연관관계 1개(양방향)    결국 양방향 관계란  객체의 양방향 관계는 사실 양방향 관계가 아니라 서로 다른 단방향 관계 2개다."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/jpa-mapping-basics/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/jpa-entity-mapping/" /><link rel="next" href="https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "연관관계 매핑 기초",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/jpa-mapping-basics\/"
+        },"genre": "posts","keywords": "JPA, Hibernate","wordcount":  939 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/jpa-mapping-basics\/","datePublished": "2021-12-29T12:50:00+00:00","dateModified": "2021-12-29T12:50:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">연관관계 매핑 기초</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-29">2021-12-29</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;939 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;5 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-연관관계의-필요성">1. 연관관계의 필요성</a></li>
+    <li><a href="#2-객체를-테이블에-맞춰-데이터-중심으로-모델링하면-협력-관계를-만들-수-없다">2. 객체를 테이블에 맞춰 데이터 중심으로 모델링하면, 협력 관계를 만들 수 없다.</a>
+      <ul>
+        <li><a href="#2-1-객체를-테이블에-맞추어-모델링연관관계가-없는-객체">2-1. 객체를 테이블에 맞추어 모델링(연관관계가 없는 객체)</a></li>
+      </ul>
+    </li>
+    <li><a href="#3-양방향-연관관계와-연관관계-주인1---기본">3. 양방향 연관관계와 연관관계 주인1 - 기본</a>
+      <ul>
+        <li><a href="#연관관계의-주인과-mappedby">연관관계의 주인과 mappedBy</a></li>
+        <li><a href="#객체와-테이블이-관계를-맺는-차이란">객체와 테이블이 관계를 맺는 차이란?</a></li>
+        <li><a href="#결국-양방향-관계란">결국 양방향 관계란</a></li>
+        <li><a href="#둘-중-하나를-외래-키로-관리해야-한다">둘 중 하나를 외래 키로 관리해야 한다.</a></li>
+        <li><a href="#연관관계의-주인owner">연관관계의 주인(Owner)</a></li>
+        <li><a href="#누구를-주인으로-하는가">누구를 주인으로 하는가?</a></li>
+      </ul>
+    </li>
+    <li><a href="#4-양방향-연관관계와-연관관계의-주인1---주의점">4. 양방향 연관관계와 연관관계의 주인1 - 주의점</a>
+      <ul>
+        <li><a href="#양방향-매핑시-가장-많이-하는-실수">양방향 매핑시 가장 많이 하는 실수</a></li>
+        <li><a href="#양방향-매핑시-무한-루프를-조심하자순환-참조">양방향 매핑시 무한 루프를 조심하자.(순환 참조)</a></li>
+        <li><a href="#양방향-매핑-정리">양방향 매핑 정리</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-연관관계의-필요성">1. 연관관계의 필요성</h2>
+<hr>
+<p>: 객체지향 설계의 목표는 자율적인 객체들의 협력 공동체를 만드는 것이다.</p>
+<br>
+<br>
+<br>
+<h2 id="2-객체를-테이블에-맞춰-데이터-중심으로-모델링하면-협력-관계를-만들-수-없다">2. 객체를 테이블에 맞춰 데이터 중심으로 모델링하면, 협력 관계를 만들 수 없다.</h2>
+<h3 id="2-1-객체를-테이블에-맞추어-모델링연관관계가-없는-객체">2-1. 객체를 테이블에 맞추어 모델링(연관관계가 없는 객체)</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2010.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2010.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2010.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2010.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2010.png"
+        title="image" /></p>
+<br>
+<ul>
+<li>
+<p>객체를 테이블에 맞추어 모델링 (참조 대신에 외래 키를 그대로 사용)</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/* 회원(Member) 엔티티*/</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+
+    <span class="nd">@Id</span> <span class="nd">@GeneratedValue</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;USERNAME&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">name</span><span class="o">;</span>
+
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;TEAM_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">teamId</span><span class="o">;</span>
+<span class="o">}</span>
+
+<span class="cm">/* 팀(Team) 엔티티 */</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Team</span><span class="o">{</span>
+    <span class="nd">@Id</span> <span class="nd">@GeneratedValue</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">name</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>객체를 위와 같이 테이블에 맞춰 모델링을 할 경우 생기는 문제는 무엇일까?</li>
+</ul>
+</li>
+</ul>
+<br>
+<ul>
+<li>
+<p>객체를 테이블에 맞춰 모델링 했을 경우 DB에 저장&amp;조회하는 로직</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/* 팀과 멤버를 저장하는 로직 */</span>
+<span class="n">Team</span> <span class="n">team</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Team</span><span class="o">();</span>
+<span class="n">team</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;teamA&#34;</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">team</span><span class="o">);</span>
+
+<span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;mamber1&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setTeamId</span><span class="o">(</span><span class="n">team</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+</code></pre></div><ul>
+<li>외래키 식별자를 직접다루고 있는데, 이럴 경우 문제는? → 조회할 때 역시 해당 외래키를 가지고 조인 쿼리를 직접 짜야 한다.</li>
+<li><strong>Q. <code>member1</code> 이 소속된 팀 정보를 조회하려면 어떻게 해야하는가?</strong></li>
+</ul>
+  <br>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">member</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>
+<span class="n">Long</span> <span class="n">findTeamId</span> <span class="o">=</span> <span class="n">findMember</span><span class="o">.</span><span class="na">getTeamId</span><span class="o">();</span>
+<span class="n">Team</span> <span class="n">findTeam</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Team</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">findTeamId</span><span class="o">);</span>
+</code></pre></div><ul>
+<li>매번 member를 우선 조회한 뒤 외래키를 뽑아 그것으로 팀의 정보를 조회해야 한다.
+→ 협력관계를 만들 수 없다.</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nl">Hibernate:</span> 
+    
+    <span class="n">create</span> <span class="n">table</span> <span class="nf">Member</span> <span class="o">(</span>
+       <span class="n">MEMBER_ID</span> <span class="n">bigint</span> <span class="n">not</span> <span class="kc">null</span><span class="o">,</span>
+        <span class="n">TEAM_ID</span> <span class="n">bigint</span><span class="o">,</span>
+        <span class="n">USERNAME</span> <span class="nf">varchar</span><span class="o">(</span><span class="n">255</span><span class="o">),</span>
+        <span class="n">primary</span> <span class="nf">key</span> <span class="o">(</span><span class="n">MEMBER_ID</span><span class="o">)</span>
+    <span class="o">)</span>
+<span class="nl">Hibernate:</span> 
+    
+    <span class="n">create</span> <span class="n">table</span> <span class="nf">Team</span> <span class="o">(</span>
+       <span class="n">TEAM_ID</span> <span class="n">bigint</span> <span class="n">not</span> <span class="kc">null</span><span class="o">,</span>
+        <span class="n">name</span> <span class="nf">varchar</span><span class="o">(</span><span class="n">255</span><span class="o">),</span>
+        <span class="n">primary</span> <span class="nf">key</span> <span class="o">(</span><span class="n">TEAM_ID</span><span class="o">)</span>
+    <span class="o">)</span>
+</code></pre></div><blockquote>
+<p>결론: 외래키를 직접 관리하는 테이블에 맞춘 객체 모델링은 객체간의 협력관계를 만들 수 없고, <br> 객체가 참조를 통해 연관객체를 찾는 다는 사상을 적용할 수 없다. <br>
+이 말은 객체지향 프로그래밍의 패러다임을 정면으로 반박하는 것.</p>
+</blockquote>
+<blockquote>
+<p>객체 지향 모델링 (객체 연관관계 사용)</p>
+</blockquote>
+<br>
+<br>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2021.png"
+        title="image" /></p>
+<br>
+<ul>
+<li>
+<p>객체 지향적으로 엔티티 설계(객체 연관관계 사용)</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/* 회원(Member) 엔티티*/</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+
+    <span class="nd">@Id</span> <span class="nd">@GeneratedValue</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;USERNAME&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">name</span><span class="o">;</span>
+
+    <span class="nd">@ManyToOne</span>
+    <span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;team_id&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Team</span> <span class="n">team</span><span class="o">;</span>
+
+    <span class="o">...</span> <span class="n">getter</span><span class="o">,</span> <span class="n">setter</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li><code>@ManyToOne</code> <code>@JoinColumn</code> 을 통해 멤버(Member)에서 팀(Team)을 참조하도록 헀다.</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2022.png"
+        title="image" /></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Team</span> <span class="n">team</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Team</span><span class="o">();</span>
+<span class="n">team</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;teamA&#34;</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">team</span><span class="o">);</span>
+
+<span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;mamber1&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setTeam</span><span class="o">(</span><span class="n">team</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+<span class="n">em</span><span class="o">.</span><span class="na">flush</span><span class="o">();</span>
+<span class="n">em</span><span class="o">.</span><span class="na">clear</span><span class="o">();</span>
+
+<span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">member</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>
+<span class="n">Team</span> <span class="n">findTeam</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="na">getTeam</span><span class="o">();</span>
+</code></pre></div><br>
+<br>
+<br>
+<h2 id="3-양방향-연관관계와-연관관계-주인1---기본">3. 양방향 연관관계와 연관관계 주인1 - 기본</h2>
+<hr>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2023.png"
+        title="image" /></p>
+<ul>
+<li>
+<p>단방향에서 양방향이 된다는 것의 의미는 양측에서 서로 참조할 수 있다는 것이다.
+기존 단방향에서는 <br> <code>Member</code> 에서 getTeam()을 통해 <code>Team</code> 엔티티를 참조할 수 있지만 <code>Team</code> 에서는 <code>Member</code> 를 참조할 수 없었다. <br>
+하지만 테이블 연관관계에서는 외래키를 가지고 양측에서 서로를 참조할 수 있다.</p>
+</li>
+<li>
+<p><code>Team</code> 객체에 members라는 List를 추가해서 양방향 연관관계를 만들어준다.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Team</span><span class="o">{</span>
+    <span class="o">...</span>
+    <span class="nd">@OneToMany</span><span class="o">(</span><span class="n">mappedBy</span> <span class="o">=</span> <span class="s">&#34;team&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">members</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;&gt;();</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div></li>
+</ul>
+<br>
+<ul>
+<li>
+<p>추가한 <code>members</code> 를 확인하는 코드를 작성해보자.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">member</span><span class="o">.</span><span class="na">getId</span><span class="o">());</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">members</span> <span class="o">=</span> <span class="n">findMember</span><span class="o">.</span><span class="na">getTeam</span><span class="o">().</span><span class="na">getMembers</span><span class="o">();</span>
+<span class="k">for</span> <span class="o">(</span><span class="n">Member</span> <span class="n">member1</span> <span class="o">:</span> <span class="n">members</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;member1.getName() = &#34;</span> <span class="o">+</span> <span class="n">member1</span><span class="o">.</span><span class="na">getName</span><span class="o">());</span> <span class="c1">// member1.getName() = mamber1
+</span><span class="c1"></span><span class="o">}</span>
+</code></pre></div><ul>
+<li>이제 반대방향으로도 객체 그래프 탐색이 가능해졌다.</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="연관관계의-주인과-mappedby">연관관계의 주인과 mappedBy</h3>
+<ul>
+<li>mappedBy = 연관관계의 개념에 대해 이해를 어렵게 만드는 주범!</li>
+<li>객체와 테이블간 연관관계를 맺는 차이를 이해해야 한다.</li>
+</ul>
+<br>
+<br>
+<h3 id="객체와-테이블이-관계를-맺는-차이란">객체와 테이블이 관계를 맺는 차이란?</h3>
+<ul>
+<li>객체 연관관계 = 2개
+<ul>
+<li>회원 → 팀 연관관계 1개(단방향)</li>
+<li>팀 → 회원 연관관계 1개(단방향)</li>
+</ul>
+</li>
+<li>테이블 연관관계 = 1개
+<ul>
+<li>회원 ←→ 팀의 연관관계 1개(양방향)</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="결국-양방향-관계란">결국 양방향 관계란</h3>
+<ul>
+<li>객체의 양방향 관계는 사실 양방향 관계가 아니라 서로 다른 단방향 관계 2개다.</li>
+<li>객체를 양방향으로 참조하려면 단방향 연관관계를 2개 만들어야 한다.
+<ul>
+<li><code>A -&gt; B(a.getB())</code></li>
+<li><code>B -&gt; A(b.getA())</code></li>
+</ul>
+</li>
+<li>테이블에서 양방향으로 참조하려면 외래 키 하나로 연관관계를 가진다. (양쪽으로 조인할 수 있다.)</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">MEMBER</span><span class="w"> </span><span class="n">M</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">TEAM</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">M</span><span class="p">.</span><span class="n">TEAM_ID</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="p">.</span><span class="n">TEAM_ID</span><span class="w">
+</span><span class="w">
+</span><span class="w"></span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">TEAM</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="k">JOIN</span><span class="w"> </span><span class="n">MEMBER</span><span class="w"> </span><span class="n">M</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">T</span><span class="p">.</span><span class="n">TEAM_ID</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">M</span><span class="p">.</span><span class="n">TEAM_ID</span><span class="w">
+</span></code></pre></div><br>
+<br>
+<h3 id="둘-중-하나를-외래-키로-관리해야-한다">둘 중 하나를 외래 키로 관리해야 한다.</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2024.png"
+        title="image" /></p>
+<ul>
+<li>두 객체에서 서로가 서로를 참조하는 값을 만들어 놓은 상황
+<ul>
+<li>
+<p>여기서 뭘로 DB에서 외래키를 만들어 관리해야 하는가?</p>
+<p>→ 연관관계의 주인(Owner)를 정해야 한다.</p>
+</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="연관관계의-주인owner">연관관계의 주인(Owner)</h3>
+<p><strong>→ 양방향 매핑 규칙</strong></p>
+<ul>
+<li>객체의 두 관계중 하나를 연관관계의 주인으로 지정</li>
+<li><strong>연관관계의 주인만이 외래 키를 관리(등록, 수정)</strong></li>
+<li><strong>주인이 아닌쪽은 읽기만 가능</strong></li>
+<li>주인은 mappedBy 속성을 사용하지 않는다.</li>
+<li>주인이 아니면 mappedBy 속성으로 주인을 지정한다.</li>
+</ul>
+<br>
+<br>
+<h3 id="누구를-주인으로-하는가">누구를 주인으로 하는가?</h3>
+<ul>
+<li>외래 키가 있는 곳을 주인으로 정하라.</li>
+<li>여기서는 Member.team이 연관관계의 주인</li>
+</ul>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2025.png"
+        title="image" /></p>
+<ul>
+<li>Q. Team에서 외래키를 관리하는 것은 불가능한가?
+A. 가능은 하다. 하지만 Team에서 members를 수정하면 Team이 아닌 Member에 업데이트 쿼리가 날라가는 불일치 현상 발생.</li>
+</ul>
+<blockquote>
+<p>결론: 외래키가 있는 곳을 주인(Owner)로 결정하라.</p>
+</blockquote>
+<br>
+<br>
+<br>
+<h2 id="4-양방향-연관관계와-연관관계의-주인1---주의점">4. 양방향 연관관계와 연관관계의 주인1 - 주의점</h2>
+<hr>
+<h3 id="양방향-매핑시-가장-많이-하는-실수">양방향 매핑시 가장 많이 하는 실수</h3>
+<p>(연관관계 주인에 값을 입려하지 않음)</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;mamber1&#34;</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+<span class="n">Team</span> <span class="n">team</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Team</span><span class="o">();</span>
+<span class="n">team</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;teamA&#34;</span><span class="o">);</span>
+<span class="n">team</span><span class="o">.</span><span class="na">getMembers</span><span class="o">().</span><span class="na">add</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">team</span><span class="o">);</span>
+
+<span class="cm">/* 실행 결과 */</span>
+</code></pre></div><ul>
+<li>
+<p>실행결과</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2026.png"
+        title="image" /></p>
+</li>
+</ul>
+<br>
+<blockquote>
+<p>결론: 양방향 매핑시 연관관계의 주인에 값을 입력해야 한다.
+순수한 객체 관계를 고려하면 양쪽 다 값을 입력해야 한다.</p>
+</blockquote>
+<br>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Team</span> <span class="n">team</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Team</span><span class="o">();</span>
+<span class="n">team</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;teamA&#34;</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">team</span><span class="o">);</span>
+
+<span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;mamber1&#34;</span><span class="o">);</span>
+
+<span class="n">team</span><span class="o">.</span><span class="na">getMembers</span><span class="o">().</span><span class="na">add</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setTeam</span><span class="o">(</span><span class="n">team</span><span class="o">);</span> <span class="c1">//연관관계의 주인에 값 입력
+</span><span class="c1"></span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+</code></pre></div><p>Q. 만약 여기서 <code>team.getMembers().add(member);</code> 을 넣지 않는다면 어떤 문제가 있을까?</p>
+<p>A. DB에 반영하는데 문제는 생기지 않는다. 하지만, 영속화 컨텍스트의 1차 캐시에 저장된 team에서는 members에 해당 Member가 추가되지 않은 상태이다. 이런 상황에서 team.members를 사용하게 된다면 DB에서 조회하는게 아닌 1차 캐시에서 꺼내 사용하기 때문에 해당 member가 추가되지 않은 결과가 반환 될 것이고, 문제가 생기게 된다. 그렇기 때문에 <strong>양쪽에 모두 값을 세팅해주는게 맞다.</strong></p>
+<br>
+<br>
+<blockquote>
+<p>TIP: 연관관계 편의 메서드를 생성하자.</p>
+</blockquote>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kt">void</span> <span class="nf">changeTeam</span><span class="o">(</span><span class="n">Team</span> <span class="n">team</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">this</span><span class="o">.</span><span class="na">team</span> <span class="o">=</span> <span class="n">team</span><span class="o">;</span>
+    <span class="n">team</span><span class="o">.</span><span class="na">getMembers</span><span class="o">().</span><span class="na">add</span><span class="o">(</span><span class="k">this</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>이제 Team을 세팅해주는 시점에서 해당 team에 Member도 같이 추가된다.</li>
+<li>(Optional) 연관관계 편의 메서드같은 옵셔널 메서드는 관례적으로 쓰이는 Getter, Setter가 아닌 사용자 정의 메서드명(임의)으로 정의해주는게 좋다.</li>
+</ul>
+<br>
+<br>
+<h3 id="양방향-매핑시-무한-루프를-조심하자순환-참조">양방향 매핑시 무한 루프를 조심하자.(순환 참조)</h3>
+<p><strong>→ Ex: toString(), lombok, JSON 생성 라이브러리</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/* 회원(Member) 엔티티*/</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+    <span class="o">...</span>
+<span class="nd">@Override</span>
+<span class="kd">public</span> <span class="n">String</span> <span class="nf">toString</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="s">&#34;Member{&#34;</span> <span class="o">+</span>
+            <span class="s">&#34;id=&#34;</span> <span class="o">+</span> <span class="n">id</span> <span class="o">+</span>
+            <span class="s">&#34;, name=&#39;&#34;</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="sc">&#39;\&#39;&#39;</span> <span class="o">+</span>
+            <span class="s">&#34;, team=&#34;</span> <span class="o">+</span> <span class="n">team</span> <span class="o">+</span>
+            <span class="sc">&#39;}&#39;</span><span class="o">;</span>
+<span class="o">}</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+
+<span class="cm">/* 팀(Team) 엔티티 */</span>
+<span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Team</span><span class="o">{</span>
+<span class="o">...</span>
+<span class="nd">@Override</span>
+<span class="kd">public</span> <span class="n">String</span> <span class="nf">toString</span><span class="o">()</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="s">&#34;Team{&#34;</span> <span class="o">+</span>
+            <span class="s">&#34;id=&#34;</span> <span class="o">+</span> <span class="n">id</span> <span class="o">+</span>
+            <span class="s">&#34;, name=&#39;&#34;</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="sc">&#39;\&#39;&#39;</span> <span class="o">+</span>
+            <span class="s">&#34;, members=&#34;</span> <span class="o">+</span> <span class="n">members</span> <span class="o">+</span>
+            <span class="sc">&#39;}&#39;</span><span class="o">;</span>
+<span class="o">}</span>
+    <span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>
+<p>실행결과</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2027.png"
+        title="image" /></p>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="양방향-매핑-정리">양방향 매핑 정리</h3>
+<ul>
+<li>단방향 매핑만으로도 이미 연관관계 매핑은 완료</li>
+<li>양방향 매핑은 반대 방향으로 조회(객체 그래프 탐색) 기능이 추가된 것 뿐</li>
+<li>JPQL에서 역방향으로 탐색할 일이 많음</li>
+<li><strong>단방향 매핑을 잘 하고 양방향은 필요할 떄 추가해도 됨
+(테이블에 영향을 주지 않는다.)</strong></li>
+<li>연관관계의 주인은 외래 키의 위치를 기준으로 정해야 함.
+<ul>
+<li>비즈니스 로직을 기준으로 연관관계의 주인을 선택하면 안된다.</li>
+</ul>
+</li>
+</ul>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-29</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/jpa-mapping-basics/" data-title="연관관계 매핑 기초" data-hashtags="JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/jpa-mapping-basics/" data-hashtag="JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/jpa-mapping-basics/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/jpa-mapping-basics/" data-title="연관관계 매핑 기초" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/jpa-entity-mapping/" class="prev" rel="prev" title="엔티티매핑"><i class="fas fa-angle-left fa-fw"></i>엔티티매핑</a>
+            <a href="/posts/jpa-mapping-various-associations/" class="next" rel="next" title="다양한 연관관계 매핑">다양한 연관관계 매핑<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

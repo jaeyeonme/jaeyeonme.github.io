@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>다양한 연관관계 매핑 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="다양한 연관관계 매핑" />
+<meta property="og:description" content="1. 연관관계 매핑시 고려사항 3가지   다중성  다대일 : @ManyToOne 일대다 : @OneToMany 일대일 : @OneToOne 다대다 : @ManyToMany → 다대다는 실무에서 사용하면 안된다. 단방향, 양방향  테이블  외래 키 하나로 양쪽 조인 가능 방향이라는 개념이 없음 양쪽이 서로 참조하면 양방향       연관관계의 주인  테이블은 외래 키 하나로 두 데이블의 연관관계를 찾음 객체 야방향 관계는 A → B, B → A 처럼 참조가 2군데 연관관계의 주인: 외래 키를 관리하는 참조 주인의 반대편 : 외래 키에 영향을 주지않고 단순 조회(참조)만 가능    2. 다대일 [N:1]  다대일(N:1) 단방향   ERD
+다대일(N:1)단방향
+ 가장 많이 사용하는 연관관계 다대일의 반대는 일대다    다대일 양방향   ERD
+ 외래 키가 있는 쪽이 연관관계의 주인 양쪽을 서로 참조하도록 개발 연관관계가 주인이 아닌 쪽은 단순 조회만 가능하기에 필드만 추가해주면 된다.  @OneToMany private List&lt;Member&gt; members = new ArrayList&lt;&gt;();   3. 일대다 [1:N]  일(One)이 연관관계의 주인이다. → 권장하는 방법은 아니다. 실무에서도 거의 사용되지 않음
+  ERD
+ 테이블 일대다 관계는 항상 다(N) 쪽에 외래 키가 있다. 객체와 테이블의 차이 떄문에 반대편 테이블의 외래키를 관리하는 특이한 구조    권장하지 않는 이유   테이블에서는 항상 다(N) 쪽에 외래키가 있기 때문에 패러다임충돌이 있다.
+  @JoinColumn 을 꼭 사용해야 한다. 그렇지 않으면 조인 테이블 방식을 사용한다. (중간에 테이블을 하나 추가함)
+  실무에서는 테이블이 수십개 이상 운영이 되는데, 관리 및 트레이싱이 어렵다.
+→ Ex) 일대다(1:N)에서 저장(save)이 될 때 양쪽 객체를 저장한 뒤 update query를 통해 외래키 설정(3번이나 수행)
+   결론: 기본은 다대일(N:1)로 구현하다 필오에 의해 양방향 다대일(N:1) 관계를 수립하도록 하자.
+ 일대다(1:N)양방향   ERD
+  이런 매핑은 공식적으로는 존재하지 않는다.
+  @JoinColumn(insertable=false, updatable=false)
+/* 팀(Team) */ public class Team{ ... @OneToMany @JoinColumn(name=&#34;TEAM_ID&#34;) private List&lt;Member&gt; members = new ArrayList&lt;&gt;(); ... } /* 멤버(Member) */ public class Member{ ... @ManyToOne @JoinColumn(name=&#34;TEAM_ID&#34;, insertable=false, updatable=false) private Team team; ... } → Member ENtity의 team field가 읽기전용 field가 됐다.
+     읽기 전용 필드를 사용해서 양방향 처럼 사용하는 방법 다대일 양방향을 사용하자.  4. 일대일(1:1)   주 테이블이나 대상 테이블 중에 외래 키 선택 가능 외래키에 데이터베이스 유니크 제약조건 추가 다대일 연관관계와 동일하게 외래키가 있는곳이 연관관계의 주인 연관관계의 주인이 아닌 곳에 mappedBy를 넣어준다. 정리  주 테이블에 외래 키  주 객체가 대상 객체의 참조를 가지는 것처럼 주 테이블에 외래 키를 두고 대상 테이블을 찾음 객체지향 개발자 선호 JPA 매핑 정리 장점 : 주 테이블만 조회해도 대상 테이블에 데이터가 있는지 확인 가능 단점 : 값이 없으면 외래 키에 null 허용   대상 테이블의 외래 키  대상 테이블에 외래 키가 존재 전통적인 데이터베이스 개발자 선호 장점 : 주 테이블과 대상 테이블을 일대일에서 일대다 관계로 변경할 때 테이블 구조 유지 단점 : 주 테이블에는 외래 키가 없기 때문에 대상 테이블이 있는지 없는지 알 수 없기 때문에 즉시로딩이 무조건 된다.      5. 다대다 [N:M]   실무에서는 거으 ㅣ사용하지도 않고 추천하지도 않는 연관관계 객체는 컬렉션을 사용해서 객체 2개로 다대다 관계 가능 @ManyToMany 사용 @JoinTable로 연결 테이블 지정  다대다 매핑의 한계  편리해 보이지만 실무에서 사용안함 연겵 테이블이 단순히 연결만 하고 끝나지 않음 주문시간, 수량 같은 데이터가 들어올 수 있음." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-29T13:00:00+00:00" />
+<meta property="article:modified_time" content="2021-12-29T13:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="다양한 연관관계 매핑"/>
+<meta name="twitter:description" content="1. 연관관계 매핑시 고려사항 3가지   다중성  다대일 : @ManyToOne 일대다 : @OneToMany 일대일 : @OneToOne 다대다 : @ManyToMany → 다대다는 실무에서 사용하면 안된다. 단방향, 양방향  테이블  외래 키 하나로 양쪽 조인 가능 방향이라는 개념이 없음 양쪽이 서로 참조하면 양방향       연관관계의 주인  테이블은 외래 키 하나로 두 데이블의 연관관계를 찾음 객체 야방향 관계는 A → B, B → A 처럼 참조가 2군데 연관관계의 주인: 외래 키를 관리하는 참조 주인의 반대편 : 외래 키에 영향을 주지않고 단순 조회(참조)만 가능    2. 다대일 [N:1]  다대일(N:1) 단방향   ERD
+다대일(N:1)단방향
+ 가장 많이 사용하는 연관관계 다대일의 반대는 일대다    다대일 양방향   ERD
+ 외래 키가 있는 쪽이 연관관계의 주인 양쪽을 서로 참조하도록 개발 연관관계가 주인이 아닌 쪽은 단순 조회만 가능하기에 필드만 추가해주면 된다.  @OneToMany private List&lt;Member&gt; members = new ArrayList&lt;&gt;();   3. 일대다 [1:N]  일(One)이 연관관계의 주인이다. → 권장하는 방법은 아니다. 실무에서도 거의 사용되지 않음
+  ERD
+ 테이블 일대다 관계는 항상 다(N) 쪽에 외래 키가 있다. 객체와 테이블의 차이 떄문에 반대편 테이블의 외래키를 관리하는 특이한 구조    권장하지 않는 이유   테이블에서는 항상 다(N) 쪽에 외래키가 있기 때문에 패러다임충돌이 있다.
+  @JoinColumn 을 꼭 사용해야 한다. 그렇지 않으면 조인 테이블 방식을 사용한다. (중간에 테이블을 하나 추가함)
+  실무에서는 테이블이 수십개 이상 운영이 되는데, 관리 및 트레이싱이 어렵다.
+→ Ex) 일대다(1:N)에서 저장(save)이 될 때 양쪽 객체를 저장한 뒤 update query를 통해 외래키 설정(3번이나 수행)
+   결론: 기본은 다대일(N:1)로 구현하다 필오에 의해 양방향 다대일(N:1) 관계를 수립하도록 하자.
+ 일대다(1:N)양방향   ERD
+  이런 매핑은 공식적으로는 존재하지 않는다.
+  @JoinColumn(insertable=false, updatable=false)
+/* 팀(Team) */ public class Team{ ... @OneToMany @JoinColumn(name=&#34;TEAM_ID&#34;) private List&lt;Member&gt; members = new ArrayList&lt;&gt;(); ... } /* 멤버(Member) */ public class Member{ ... @ManyToOne @JoinColumn(name=&#34;TEAM_ID&#34;, insertable=false, updatable=false) private Team team; ... } → Member ENtity의 team field가 읽기전용 field가 됐다.
+     읽기 전용 필드를 사용해서 양방향 처럼 사용하는 방법 다대일 양방향을 사용하자.  4. 일대일(1:1)   주 테이블이나 대상 테이블 중에 외래 키 선택 가능 외래키에 데이터베이스 유니크 제약조건 추가 다대일 연관관계와 동일하게 외래키가 있는곳이 연관관계의 주인 연관관계의 주인이 아닌 곳에 mappedBy를 넣어준다. 정리  주 테이블에 외래 키  주 객체가 대상 객체의 참조를 가지는 것처럼 주 테이블에 외래 키를 두고 대상 테이블을 찾음 객체지향 개발자 선호 JPA 매핑 정리 장점 : 주 테이블만 조회해도 대상 테이블에 데이터가 있는지 확인 가능 단점 : 값이 없으면 외래 키에 null 허용   대상 테이블의 외래 키  대상 테이블에 외래 키가 존재 전통적인 데이터베이스 개발자 선호 장점 : 주 테이블과 대상 테이블을 일대일에서 일대다 관계로 변경할 때 테이블 구조 유지 단점 : 주 테이블에는 외래 키가 없기 때문에 대상 테이블이 있는지 없는지 알 수 없기 때문에 즉시로딩이 무조건 된다.      5. 다대다 [N:M]   실무에서는 거으 ㅣ사용하지도 않고 추천하지도 않는 연관관계 객체는 컬렉션을 사용해서 객체 2개로 다대다 관계 가능 @ManyToMany 사용 @JoinTable로 연결 테이블 지정  다대다 매핑의 한계  편리해 보이지만 실무에서 사용안함 연겵 테이블이 단순히 연결만 하고 끝나지 않음 주문시간, 수량 같은 데이터가 들어올 수 있음."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/jpa-mapping-basics/" /><link rel="next" href="https://jaeyeonme.github.io/posts/jpa-advanced-mapping/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "다양한 연관관계 매핑",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/jpa-mapping-various-associations\/"
+        },"genre": "posts","keywords": "JPA, Hibernate","wordcount":  507 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/jpa-mapping-various-associations\/","datePublished": "2021-12-29T13:00:00+00:00","dateModified": "2021-12-29T13:00:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">다양한 연관관계 매핑</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-29">2021-12-29</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;507 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;3 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-연관관계-매핑시-고려사항-3가지">1. 연관관계 매핑시 고려사항 3가지</a></li>
+    <li><a href="#2-다대일-n1">2. 다대일 [N:1]</a>
+      <ul>
+        <li><a href="#다대일n1-단방향">다대일(<code>N:1</code>) 단방향</a></li>
+        <li><a href="#다대일-양방향">다대일 양방향</a></li>
+      </ul>
+    </li>
+    <li><a href="#3-일대다-1n">3. 일대다 [1:N]</a>
+      <ul>
+        <li><a href="#일one이-연관관계의-주인이다">일(One)이 연관관계의 주인이다.</a></li>
+        <li><a href="#권장하지-않는-이유">권장하지 않는 이유</a></li>
+        <li><a href="#일대다1n양방향">일대다(<code>1:N</code>)양방향</a></li>
+      </ul>
+    </li>
+    <li><a href="#4-일대일11">4. 일대일(1:1)</a></li>
+    <li><a href="#5-다대다-nm">5. 다대다 [N:M]</a>
+      <ul>
+        <li><a href="#다대다-매핑의-한계">다대다 매핑의 한계</a></li>
+        <li><a href="#다대다-한계-극복">다대다 한계 극복</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-연관관계-매핑시-고려사항-3가지">1. 연관관계 매핑시 고려사항 3가지</h2>
+<hr>
+<ul>
+<li>다중성
+<ul>
+<li>다대일 : <code>@ManyToOne</code></li>
+<li>일대다 : <code>@OneToMany</code></li>
+<li>일대일 : <code>@OneToOne</code></li>
+<li>다대다 : <code>@ManyToMany</code> <br>
+<strong>→ 다대다는 실무에서 사용하면 안된다.</strong></li>
+<li>단방향, 양방향
+<ul>
+<li>테이블
+<ul>
+<li>외래 키 하나로 양쪽 조인 가능</li>
+<li>방향이라는 개념이 없음</li>
+<li>양쪽이 서로 참조하면 양방향</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>연관관계의 주인
+<ul>
+<li>테이블은 외래 키 하나로 두 데이블의 연관관계를 찾음</li>
+<li>객체 야방향 관계는 A → B, B → A 처럼 참조가 2군데</li>
+<li>연관관계의 주인: 외래 키를 관리하는 참조</li>
+<li>주인의 반대편 : 외래 키에 영향을 주지않고 단순 조회(참조)만 가능</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="2-다대일-n1">2. 다대일 [N:1]</h2>
+<hr>
+<h3 id="다대일n1-단방향">다대일(<code>N:1</code>) 단방향</h3>
+<ul>
+<li>
+<p>ERD</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2016.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2016.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2016.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2016.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2016.png"
+        title="image" /></p>
+<p>다대일(<code>N:1</code>)단방향</p>
+<ul>
+<li>가장 많이 사용하는 연관관계</li>
+<li>다대일의 반대는 일대다</li>
+</ul>
+</li>
+</ul>
+<br>
+<h3 id="다대일-양방향">다대일 양방향</h3>
+<ul>
+<li>
+<p>ERD</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2011.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2011.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2011.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2011.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2011.png"
+        title="image" /></p>
+<ul>
+<li>외래 키가 있는 쪽이 연관관계의 주인</li>
+<li>양쪽을 서로 참조하도록 개발</li>
+<li>연관관계가 주인이 아닌 쪽은 단순 조회만 가능하기에 필드만 추가해주면 된다.</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@OneToMany</span>
+<span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">members</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;&gt;();</span>
+</code></pre></div></li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="3-일대다-1n">3. 일대다 [1:N]</h2>
+<hr>
+<h3 id="일one이-연관관계의-주인이다">일(One)이 연관관계의 주인이다.</h3>
+<p>→ 권장하는 방법은 아니다. 실무에서도 거의 사용되지 않음</p>
+<ul>
+<li>
+<p>ERD</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2012.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2012.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2012.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2012.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2012.png"
+        title="image" /></p>
+<ul>
+<li>테이블 일대다 관계는 항상 다(N) 쪽에 외래 키가 있다.</li>
+<li>객체와 테이블의 차이 떄문에 반대편 테이블의 외래키를 관리하는 특이한 구조</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="권장하지-않는-이유">권장하지 않는 이유</h3>
+<ol>
+<li>
+<p>테이블에서는 항상 다(N) 쪽에 외래키가 있기 때문에 패러다임충돌이 있다.</p>
+</li>
+<li>
+<p><code>@JoinColumn</code> 을 꼭 사용해야 한다. 그렇지 않으면 조인 테이블 방식을 사용한다. (중간에 테이블을 하나 추가함)</p>
+</li>
+<li>
+<p>실무에서는 테이블이 수십개 이상 운영이 되는데, 관리 및 트레이싱이 어렵다.</p>
+<p><strong>→ Ex) 일대다(<code>1:N</code>)에서 저장(save)이 될 때 양쪽 객체를 저장한 뒤 update query를 통해 외래키 설정(3번이나 수행)</strong></p>
+</li>
+</ol>
+<br>
+<blockquote>
+<p>결론: 기본은 다대일(<code>N:1</code>)로 구현하다 필오에 의해 양방향 다대일(<code>N:1</code>) 관계를 수립하도록 하자.</p>
+</blockquote>
+<br>
+<br>
+<h3 id="일대다1n양방향">일대다(<code>1:N</code>)양방향</h3>
+<ul>
+<li>
+<p>ERD</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2013.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2013.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2013.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2013.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2013.png"
+        title="image" /></p>
+<ul>
+<li>
+<p>이런 매핑은 공식적으로는 존재하지 않는다.</p>
+</li>
+<li>
+<p><code>@JoinColumn(insertable=false, updatable=false)</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/* 팀(Team) */</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Team</span><span class="o">{</span>
+        <span class="o">...</span>
+<span class="nd">@OneToMany</span>
+<span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;TEAM_ID&#34;</span><span class="o">)</span>
+<span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">members</span> <span class="o">=</span> <span class="k">new</span> <span class="n">ArrayList</span><span class="o">&lt;&gt;();</span>
+		<span class="o">...</span>
+<span class="o">}</span>
+
+<span class="cm">/* 멤버(Member) */</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span><span class="o">{</span>
+		<span class="o">...</span>
+<span class="nd">@ManyToOne</span>
+<span class="nd">@JoinColumn</span><span class="o">(</span><span class="n">name</span><span class="o">=</span><span class="s">&#34;TEAM_ID&#34;</span><span class="o">,</span> <span class="n">insertable</span><span class="o">=</span><span class="kc">false</span><span class="o">,</span> <span class="n">updatable</span><span class="o">=</span><span class="kc">false</span><span class="o">)</span>
+<span class="kd">private</span> <span class="n">Team</span> <span class="n">team</span><span class="o">;</span>
+		<span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div><p><strong>→ Member ENtity의 team field가 읽기전용 field가 됐다.</strong></p>
+</li>
+</ul>
+</li>
+</ul>
+<br>
+<ul>
+<li>읽기 전용 필드를 사용해서 양방향 처럼 사용하는 방법</li>
+<li>다대일 양방향을 사용하자.</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="4-일대일11">4. 일대일(1:1)</h2>
+<hr>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2014.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2014.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2014.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2014.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2014.png"
+        title="image" /></p>
+<ul>
+<li>주 테이블이나 대상 테이블 중에 외래 키 선택 가능</li>
+<li>외래키에 데이터베이스 유니크 제약조건 추가</li>
+<li>다대일 연관관계와 동일하게 외래키가 있는곳이 연관관계의 주인</li>
+<li>연관관계의 주인이 아닌 곳에 mappedBy를 넣어준다.</li>
+<li>정리
+<ol>
+<li>주 테이블에 외래 키
+<ul>
+<li>주 객체가 대상 객체의 참조를 가지는 것처럼 주 테이블에 외래 키를 두고 대상 테이블을 찾음</li>
+<li>객체지향 개발자 선호</li>
+<li>JPA 매핑 정리</li>
+<li>장점 : 주 테이블만 조회해도 대상 테이블에 데이터가 있는지 확인 가능</li>
+<li>단점 : 값이 없으면 외래 키에 null 허용</li>
+</ul>
+</li>
+<li>대상 테이블의 외래 키
+<ul>
+<li>대상 테이블에 외래 키가 존재</li>
+<li>전통적인 데이터베이스 개발자 선호</li>
+<li>장점 : 주 테이블과 대상 테이블을 일대일에서 일대다 관계로 변경할 때 테이블 구조 유지</li>
+<li>단점 : 주 테이블에는 외래 키가 없기 때문에 대상 테이블이 있는지 없는지 알 수 없기 때문에 즉시로딩이 무조건 된다.</li>
+</ul>
+</li>
+</ol>
+</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="5-다대다-nm">5. 다대다 [N:M]</h2>
+<hr>
+<ul>
+<li>실무에서는 거으 ㅣ사용하지도 않고 추천하지도 않는 연관관계</li>
+<li>객체는 컬렉션을 사용해서 객체 2개로 다대다 관계 가능</li>
+<li>@ManyToMany 사용</li>
+<li>@JoinTable로 연결 테이블 지정</li>
+</ul>
+<br>
+<br>
+<h3 id="다대다-매핑의-한계">다대다 매핑의 한계</h3>
+<ul>
+<li>편리해 보이지만 실무에서 사용안함</li>
+<li>연겵 테이블이 단순히 연결만 하고 끝나지 않음</li>
+<li>주문시간, 수량 같은 데이터가 들어올 수 있음. 그런데 못 들어옴</li>
+<li>중간테이블에 추가적인 데이터를 넣을 수 없다는 한계점 존재.</li>
+<li>중간테이블이 숨겨져 있기 떄문에 의도치 않은 쿼리가 생성될 수 있음</li>
+</ul>
+<br>
+<br>
+<h3 id="다대다-한계-극복">다대다 한계 극복</h3>
+<ul>
+<li>연결 테이블용 엔티티 추가(연결 테이블을 엔티티로 승격)
+<ul>
+<li>Ex: Order와 Item 사이에 ORderItem 연결 테이블을 엔티티로 추가</li>
+</ul>
+</li>
+<li>@ManyToMany → @OneToMany, @ManyToOne</li>
+<li>아래의 Order 테이블과 다르게 MEMBER_ID, PRODUCT_ID를 복합키로 PK 선언도 가능하지만, <br>
+새로운 프라이머리 키를 선언해서 사용하는게 조금 더 선호됨</li>
+</ul>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2015.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2015.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2015.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2015.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2015.png"
+        title="image" /></p>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-29</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/" data-title="다양한 연관관계 매핑" data-hashtags="JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/" data-hashtag="JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/" data-title="다양한 연관관계 매핑" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/jpa-mapping-basics/" class="prev" rel="prev" title="연관관계 매핑 기초"><i class="fas fa-angle-left fa-fw"></i>연관관계 매핑 기초</a>
+            <a href="/posts/jpa-advanced-mapping/" class="next" rel="next" title="고급 매핑">고급 매핑<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

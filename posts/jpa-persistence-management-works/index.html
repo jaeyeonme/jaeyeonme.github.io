@@ -66,7 +66,7 @@ commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜�
 <meta name="application-name" content="📚 | Dev Blog">
 <meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/jpa-persistence-management-works/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/jpa-persistence-management-works/" /><link rel="next" href="https://jaeyeonme.github.io/posts/jpa-entity-mapping/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
     {
         "@context": "http://schema.org",
         "@type": "BlogPosting",
@@ -78,9 +78,9 @@ commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜�
         },"genre": "posts","keywords": "JPA, Hibernate","wordcount":  727 ,
         "url": "https:\/\/jaeyeonme.github.io\/posts\/jpa-persistence-management-works\/","datePublished": "2021-12-29T12:00:00+00:00","dateModified": "2021-12-29T12:00:00+00:00","publisher": {
             "@type": "Organization",
-            "name": "Jaeeon"},"author": {
+            "name": "Jaeyeon"},"author": {
                 "@type": "Person",
-                "name": "Jaeeon"
+                "name": "Jaeyeon"
             },"description": ""
     }
     </script></head>
@@ -124,7 +124,7 @@ commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜�
             <h2 class="toc-title">Contents</h2>
             <div class="toc-content" id="toc-content-auto"></div>
         </div><article class="page single"><h1 class="single-title animated flipInX">영속성관리 - 내부 동작 방식</h1><div class="post-meta">
-            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
             <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-29">2021-12-29</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;727 words&nbsp;
                 <i class="far fa-clock fa-fw"></i>&nbsp;4 minutes&nbsp;</div>
         </div><div class="featured-image"><img
@@ -134,7 +134,7 @@ commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜�
         data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
         data-sizes="auto"
         alt="/images/JPA/jpa.png"
-        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="true">
+        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
                 <div class="details-summary toc-title">
                     <span>Contents</span>
                     <span><i class="details-icon fas fa-angle-right"></i></span>
@@ -514,7 +514,8 @@ commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜�
         </section>
     </div>
 
-    <div class="post-nav"></div>
+    <div class="post-nav">
+            <a href="/posts/jpa-entity-mapping/" class="next" rel="next" title="엔티티매핑">엔티티매핑<i class="fas fa-angle-right fa-fw"></i></a></div>
 </div>
 <div id="comments"><script src="https://utteranc.es/client.js"
                         repo="jaeyeonme/blog_comments"
@@ -527,7 +528,7 @@ commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜�
             </noscript></div></article></div>
             </main><footer class="footer">
         <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
-                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeeon</a></span></div>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
         </div>
     </footer></div>
 

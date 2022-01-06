@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>엔티티매핑 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="엔티티매핑" />
+<meta property="og:description" content="엔티티 매핑 소개   객체와 테이블 매핑 : @Entity , @Table 필드와 컬럼 매핑 : @Column 기본 키 매핑 : @Id 연관관계 매핑 : @ManyToOne , @JoinColumn  JPA로 데이터베이스 스키마를 자동 생성하는 방법 JPA로 어플리케이션 로딩 시점에 테이블을 생성할 수 있다. 일일이 스키마를 수정하기 힘든 개발 환경에서 사용하면 좋다. 운영에서 쓰려면 절대 그대로 사용해서 안 되고 다듬어야 한다.
+엔티티 매핑을 해놓으면, JPA가 어플리케이션 실행 시점에 DDL을 자동 생성하여 수행한다. 객체 중심으로 개발해 놓기만 하면 되니 테이블을 건드릴 필요 없다. 게다가 데이터베이스 방언(dialect)를 활용해 DB에 알맞는 DDL을 만든다.
+스프링 부트에선 spring.jpa.hibernate.ddl-auto 속성으로 스키마 생성 전략을 설정할 수 있다.
+  create : 기존 테이블 삭제 후 다시 생성 (DROP -&gt; CREATE)
+  create-drop : create &#43; 종료 시점 drop (DROP -&gt; CREATE -&gt; DROP)
+  update : 추가된 사항만 반영, 이미 반영된 것을 지우는 작업은 불가능! (특히 운영DB에서 사용하면 안 됨)
+  validate : 엔티티와 테이블이 알맞게 매핑되었는지 검증
+  none : 사용하지 않음
+  로컬 서버에서 자유롭게 사용하고, 여러 명의 개발자가 사용하는 서버에선 사용하지 않는 게 좋다.
+create / create-drop은 기존 테이블을 드랍하기 때문에 기존 데이터를 날려버리고, update는 alter문을 실행하면서 테이블 lock을 걸기 때문에 조심해야 한다.
+실무에서는 validate 를 사용
+1. 객체와 테이블 매핑 @Entity   @Entity가 붙은 클래스는 JPA가 관리, 엔티티라 한다. JPA를 사용해서 테이블과 매핑할 클래스는 @Entity 필수 주의  기본 생성자 필수 (파라미터가 없는 public 또는 protected 생성자) final 클래스, enum, interface, inner 클래스 사용X 저장할 필드에 final 사용X    @Entity 속성 정리   속성 : name  JPA에서 사용할 엔티티 이름을 지정한다. 기본값 : 클래스 이름을 그대로 사용 (예: Member) 같은 클래스 이름이 없으면 가급적 기본값을 사용한다.    주의할 점
+ 기본 생성자 필수 (public or protected) final 클래스 / inner 클래스 / enum / interface 에는 사용 불가능 DB 컬럼과 매핑될 필드에 final 사용 불가능  @Table   @Table은 엔티티와 매핑할 테이블 지정     속성 기능 기본값     name 매핑할 테이블 이름 엔티티 이름을 사용   catalog 데이터베이스 catalog 매핑    schema 데이터베이스 schema 매핑    uniqueConstrints (DDL) DDL 생성 시에 유니크 제약 조건 생성     2. 데이터베이스 스키마 자동 생성  데이터베이스 스키마 자동 생성  DDL을 어플리케이션 실행 시점에 자동 생성 테이블 중심 → 객체 중심 데이터베이스 방언을 활용해서 데이터베이스에 맞는 적절한 DDL 생성 이렇게 생성된 DDL은 개발 장비에서만 사용 생성된 DDL은 운영서버에서는 사용되지 않거나 적절히 다듬은 후 사용  데이터베이스 스키마 자동 생성 - 속성  hibernate.hbm2ddl.auto  create : 기존 테이블 삭제 후 다시 생성 (DROP &#43; CREATE) create-drop : create와 같으나 종료시점에 테이블 DROP update : 변경분만 반영 (운영DB에는 사용하면 안됨) validate : 엔티티와 테이블이 정상 매핑되었는지만 확인 none : 사용하지 않음    DDL 생성 기능  제약조건 추가 : 회원 이름 필수 , 10자 초과 X  @Column(nullable = false, length = 10)   유니크 제약조건 추가  @Table(uniqueConstraints = {@UniqueCOnstraint(name = &quot;NAME_AGE_UNIQUE&quot;, columnNames = {&quot;NAME&quot;, &quot;AGE&quot;})})   DDL 생성 기능은 DDL을 자동 생성할 때만 사용되고 JPA의 실행 로직에는 영향을 주지 않는다." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/jpa-entity-mapping/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-29T12:10:00+00:00" />
+<meta property="article:modified_time" content="2021-12-29T12:10:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="엔티티매핑"/>
+<meta name="twitter:description" content="엔티티 매핑 소개   객체와 테이블 매핑 : @Entity , @Table 필드와 컬럼 매핑 : @Column 기본 키 매핑 : @Id 연관관계 매핑 : @ManyToOne , @JoinColumn  JPA로 데이터베이스 스키마를 자동 생성하는 방법 JPA로 어플리케이션 로딩 시점에 테이블을 생성할 수 있다. 일일이 스키마를 수정하기 힘든 개발 환경에서 사용하면 좋다. 운영에서 쓰려면 절대 그대로 사용해서 안 되고 다듬어야 한다.
+엔티티 매핑을 해놓으면, JPA가 어플리케이션 실행 시점에 DDL을 자동 생성하여 수행한다. 객체 중심으로 개발해 놓기만 하면 되니 테이블을 건드릴 필요 없다. 게다가 데이터베이스 방언(dialect)를 활용해 DB에 알맞는 DDL을 만든다.
+스프링 부트에선 spring.jpa.hibernate.ddl-auto 속성으로 스키마 생성 전략을 설정할 수 있다.
+  create : 기존 테이블 삭제 후 다시 생성 (DROP -&gt; CREATE)
+  create-drop : create &#43; 종료 시점 drop (DROP -&gt; CREATE -&gt; DROP)
+  update : 추가된 사항만 반영, 이미 반영된 것을 지우는 작업은 불가능! (특히 운영DB에서 사용하면 안 됨)
+  validate : 엔티티와 테이블이 알맞게 매핑되었는지 검증
+  none : 사용하지 않음
+  로컬 서버에서 자유롭게 사용하고, 여러 명의 개발자가 사용하는 서버에선 사용하지 않는 게 좋다.
+create / create-drop은 기존 테이블을 드랍하기 때문에 기존 데이터를 날려버리고, update는 alter문을 실행하면서 테이블 lock을 걸기 때문에 조심해야 한다.
+실무에서는 validate 를 사용
+1. 객체와 테이블 매핑 @Entity   @Entity가 붙은 클래스는 JPA가 관리, 엔티티라 한다. JPA를 사용해서 테이블과 매핑할 클래스는 @Entity 필수 주의  기본 생성자 필수 (파라미터가 없는 public 또는 protected 생성자) final 클래스, enum, interface, inner 클래스 사용X 저장할 필드에 final 사용X    @Entity 속성 정리   속성 : name  JPA에서 사용할 엔티티 이름을 지정한다. 기본값 : 클래스 이름을 그대로 사용 (예: Member) 같은 클래스 이름이 없으면 가급적 기본값을 사용한다.    주의할 점
+ 기본 생성자 필수 (public or protected) final 클래스 / inner 클래스 / enum / interface 에는 사용 불가능 DB 컬럼과 매핑될 필드에 final 사용 불가능  @Table   @Table은 엔티티와 매핑할 테이블 지정     속성 기능 기본값     name 매핑할 테이블 이름 엔티티 이름을 사용   catalog 데이터베이스 catalog 매핑    schema 데이터베이스 schema 매핑    uniqueConstrints (DDL) DDL 생성 시에 유니크 제약 조건 생성     2. 데이터베이스 스키마 자동 생성  데이터베이스 스키마 자동 생성  DDL을 어플리케이션 실행 시점에 자동 생성 테이블 중심 → 객체 중심 데이터베이스 방언을 활용해서 데이터베이스에 맞는 적절한 DDL 생성 이렇게 생성된 DDL은 개발 장비에서만 사용 생성된 DDL은 운영서버에서는 사용되지 않거나 적절히 다듬은 후 사용  데이터베이스 스키마 자동 생성 - 속성  hibernate.hbm2ddl.auto  create : 기존 테이블 삭제 후 다시 생성 (DROP &#43; CREATE) create-drop : create와 같으나 종료시점에 테이블 DROP update : 변경분만 반영 (운영DB에는 사용하면 안됨) validate : 엔티티와 테이블이 정상 매핑되었는지만 확인 none : 사용하지 않음    DDL 생성 기능  제약조건 추가 : 회원 이름 필수 , 10자 초과 X  @Column(nullable = false, length = 10)   유니크 제약조건 추가  @Table(uniqueConstraints = {@UniqueCOnstraint(name = &quot;NAME_AGE_UNIQUE&quot;, columnNames = {&quot;NAME&quot;, &quot;AGE&quot;})})   DDL 생성 기능은 DDL을 자동 생성할 때만 사용되고 JPA의 실행 로직에는 영향을 주지 않는다."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/jpa-entity-mapping/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/jpa-persistence-management-works/" /><link rel="next" href="https://jaeyeonme.github.io/posts/jpa-mapping-basics/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "엔티티매핑",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/jpa-entity-mapping\/"
+        },"genre": "posts","keywords": "JPA, Hibernate","wordcount":  1247 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/jpa-entity-mapping\/","datePublished": "2021-12-29T12:10:00+00:00","dateModified": "2021-12-29T12:10:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">엔티티매핑</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-29">2021-12-29</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;1247 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;6 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#엔티티-매핑-소개">엔티티 매핑 소개</a>
+      <ul>
+        <li><a href="#jpa로-데이터베이스-스키마를-자동-생성하는-방법">JPA로 데이터베이스 스키마를 자동 생성하는 방법</a></li>
+      </ul>
+    </li>
+    <li><a href="#1-객체와-테이블-매핑">1. 객체와 테이블 매핑</a>
+      <ul>
+        <li><a href="#entity">@Entity</a></li>
+        <li><a href="#entity-속성-정리">@Entity 속성 정리</a></li>
+        <li><a href="#table">@Table</a></li>
+      </ul>
+    </li>
+    <li><a href="#2-데이터베이스-스키마-자동-생성">2. 데이터베이스 스키마 자동 생성</a>
+      <ul>
+        <li><a href="#데이터베이스-스키마-자동-생성">데이터베이스 스키마 자동 생성</a></li>
+        <li><a href="#데이터베이스-스키마-자동-생성---속성">데이터베이스 스키마 자동 생성 - 속성</a></li>
+        <li><a href="#ddl-생성-기능">DDL 생성 기능</a></li>
+      </ul>
+    </li>
+    <li><a href="#3-필드와-컬럼-매핑">3. 필드와 컬럼 매핑</a>
+      <ul>
+        <li><a href="#요구사항-추가">요구사항 추가</a></li>
+        <li><a href="#enumerated">@Enumerated</a></li>
+        <li><a href="#temporal">@Temporal</a></li>
+        <li><a href="#lob">@Lob</a></li>
+        <li><a href="#transient">@Transient</a></li>
+        <li><a href="#column">@Column</a></li>
+      </ul>
+    </li>
+    <li><a href="#4-기본-키-매핑">4. 기본 키 매핑</a>
+      <ul>
+        <li><a href="#시퀀스-조회의-비용을-줄이는-옵션">시퀀스 조회의 비용을 줄이는 옵션</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="엔티티-매핑-소개">엔티티 매핑 소개</h2>
+<hr>
+<ul>
+<li>객체와 테이블 매핑 : <code>@Entity</code> , <code>@Table</code></li>
+<li>필드와 컬럼 매핑 : <code>@Column</code></li>
+<li>기본 키 매핑 : <code>@Id</code></li>
+<li>연관관계 매핑 : <code>@ManyToOne</code> , <code>@JoinColumn</code></li>
+</ul>
+<br>
+<br>
+<h3 id="jpa로-데이터베이스-스키마를-자동-생성하는-방법">JPA로 데이터베이스 스키마를 자동 생성하는 방법</h3>
+<p>JPA로 어플리케이션 로딩 시점에 테이블을 생성할 수 있다. 일일이 스키마를 수정하기 힘든 <strong>개발 환경에서 사용</strong>하면 좋다. <br> 운영에서 쓰려면 절대 그대로 사용해서 안 되고 다듬어야 한다.</p>
+<p>엔티티 매핑을 해놓으면, JPA가 어플리케이션 실행 시점에 DDL을 자동 생성하여 수행한다. <br> 객체 중심으로 개발해 놓기만 하면 되니 테이블을 건드릴 필요 없다. <br> 게다가 데이터베이스 방언(dialect)를 활용해 DB에 알맞는 DDL을 만든다.</p>
+<br>
+<br>
+<p><strong>스프링 부트에선 spring.jpa.hibernate.ddl-auto 속성</strong>으로 스키마 생성 전략을 설정할 수 있다.</p>
+<ol>
+<li>
+<p>create : 기존 테이블 삭제 후 다시 생성 (DROP -&gt; CREATE)</p>
+</li>
+<li>
+<p>create-drop : create + 종료 시점 drop (DROP -&gt; CREATE -&gt; DROP)</p>
+</li>
+<li>
+<p>update : 추가된 사항만 반영, 이미 반영된 것을 지우는 작업은 불가능! (특히 운영DB에서 사용하면 안 됨)</p>
+</li>
+<li>
+<p>validate : 엔티티와 테이블이 알맞게 매핑되었는지 검증</p>
+</li>
+<li>
+<p>none : 사용하지 않음</p>
+</li>
+</ol>
+<p>로컬 서버에서 자유롭게 사용하고, 여러 명의 개발자가 사용하는 서버에선 사용하지 않는 게 좋다.<br> <code>create / create-drop</code>은 기존 테이블을 드랍하기 때문에 기존 데이터를 날려버리고, <br> update는 alter문을 실행하면서 테이블 lock을 걸기 때문에 조심해야 한다.</p>
+<br>
+<p><strong>실무에서는 <code>validate</code> 를 사용</strong></p>
+<br>
+<br>
+<br>
+<h2 id="1-객체와-테이블-매핑">1. 객체와 테이블 매핑</h2>
+<h3 id="entity">@Entity</h3>
+<hr>
+<ul>
+<li>@Entity가 붙은 클래스는 JPA가 관리, 엔티티라 한다.</li>
+<li>JPA를 사용해서 테이블과 매핑할 클래스는 @Entity 필수</li>
+<li>주의
+<ul>
+<li><code>기본 생성자 필수</code> (파라미터가 없는 public 또는 protected 생성자)</li>
+<li>final 클래스, enum, interface, inner 클래스 사용X</li>
+<li>저장할 필드에 final 사용X</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="entity-속성-정리">@Entity 속성 정리</h3>
+<hr>
+<ul>
+<li>속성 : name
+<ul>
+<li>JPA에서 사용할 엔티티 이름을 지정한다.</li>
+<li>기본값 : 클래스 이름을 그대로 사용 (예: Member)</li>
+<li>같은 클래스 이름이 없으면 가급적 기본값을 사용한다.</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<p><strong>주의할 점</strong></p>
+<ol>
+<li>기본 생성자 필수 (public or protected)</li>
+<li>final 클래스 / inner 클래스 / enum / interface 에는 사용 불가능</li>
+<li>DB 컬럼과 매핑될 필드에 final 사용 불가능</li>
+</ol>
+<br>
+<br>
+<h3 id="table">@Table</h3>
+<hr>
+<ul>
+<li>@Table은 엔티티와 매핑할 테이블 지정</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>속성</th>
+<th>기능</th>
+<th>기본값</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>name</td>
+<td>매핑할 테이블 이름</td>
+<td>엔티티 이름을 사용</td>
+</tr>
+<tr>
+<td>catalog</td>
+<td>데이터베이스 catalog 매핑</td>
+<td></td>
+</tr>
+<tr>
+<td>schema</td>
+<td>데이터베이스 schema 매핑</td>
+<td></td>
+</tr>
+<tr>
+<td>uniqueConstrints (DDL)</td>
+<td>DDL 생성 시에 유니크 제약 조건 생성</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<br>
+<br>
+<br>
+<h2 id="2-데이터베이스-스키마-자동-생성">2. 데이터베이스 스키마 자동 생성</h2>
+<hr>
+<h3 id="데이터베이스-스키마-자동-생성">데이터베이스 스키마 자동 생성</h3>
+<ul>
+<li>DDL을 어플리케이션 실행 시점에 자동 생성</li>
+<li>테이블 중심 → 객체 중심</li>
+<li>데이터베이스 방언을 활용해서 데이터베이스에 맞는 적절한 DDL 생성</li>
+<li>이렇게 <code>생성된 DDL은 개발 장비에서만 사용</code></li>
+<li>생성된 DDL은 운영서버에서는 사용되지 않거나 적절히 다듬은 후 사용</li>
+</ul>
+<br>
+<br>
+<h3 id="데이터베이스-스키마-자동-생성---속성">데이터베이스 스키마 자동 생성 - 속성</h3>
+<ol>
+<li>hibernate.hbm2ddl.auto
+<ol>
+<li>create : 기존 테이블 삭제 후 다시 생성 (DROP + CREATE)</li>
+<li>create-drop : create와 같으나 종료시점에 테이블 DROP</li>
+<li>update : 변경분만 반영 (운영DB에는 사용하면 안됨)</li>
+<li>validate : 엔티티와 테이블이 정상 매핑되었는지만 확인</li>
+<li>none : 사용하지 않음</li>
+</ol>
+</li>
+</ol>
+<br>
+<br>
+<h3 id="ddl-생성-기능">DDL 생성 기능</h3>
+<ul>
+<li>제약조건 추가 : 회원 이름 <code>필수</code> , 10자 초과 X
+<ul>
+<li><code>@Column(nullable = false, length = 10)</code></li>
+</ul>
+</li>
+<li>유니크 제약조건 추가
+<ul>
+<li><code>@Table(uniqueConstraints = {@UniqueCOnstraint(name = &quot;NAME_AGE_UNIQUE&quot;, columnNames = {&quot;NAME&quot;, &quot;AGE&quot;})})</code></li>
+</ul>
+</li>
+<li>DDL 생성 기능은 DDL을 자동 생성할 때만 사용되고 JPA의 실행 로직에는 영향을 주지 않는다.</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="3-필드와-컬럼-매핑">3. 필드와 컬럼 매핑</h2>
+<hr>
+<h3 id="요구사항-추가">요구사항 추가</h3>
+<ol>
+<li>회원은 일반 회원과 관리자로 구분해야 한다.</li>
+<li>회원 가입일과 수정일이 있어야 한다.</li>
+<li>회원을 설명할 수 있는 필드가 있어야 한다. 이 필드는 길이 제한이 없다.</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+    
+    <span class="nd">@Id</span> <span class="nd">@GeneratedValue</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+    
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">username</span><span class="o">;</span>
+    
+    <span class="nd">@Enumerated</span><span class="o">(</span><span class="n">EnumType</span><span class="o">.</span><span class="na">STRING</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">RoleType</span> <span class="n">roleType</span><span class="o">;</span>
+    
+    <span class="nd">@Temporal</span><span class="o">(</span><span class="n">TemporalType</span><span class="o">.</span><span class="na">TIMESTAMP</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Date</span> <span class="n">cereatedDate</span><span class="o">;</span>
+    
+    <span class="kd">private</span> <span class="n">LocalDate</span> <span class="n">lastModifiedDate</span><span class="o">;</span>
+    
+    <span class="nd">@Lob</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">description</span><span class="o">;</span>
+
+    <span class="nd">@Transient</span>
+    <span class="kd">private</span> <span class="kt">int</span> <span class="n">tmp_number</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nl">Hibernate:</span> 
+    
+    <span class="n">create</span> <span class="n">table</span> <span class="nf">Member</span> <span class="o">(</span>
+       <span class="n">id</span> <span class="n">bigint</span> <span class="n">not</span> <span class="kc">null</span><span class="o">,</span>
+        <span class="n">age</span> <span class="n">integer</span><span class="o">,</span>
+        <span class="n">createdDate</span> <span class="n">timestamp</span><span class="o">,</span>
+        <span class="n">description</span> <span class="n">clob</span><span class="o">,</span>
+        <span class="n">lastModifiedDate</span> <span class="n">timestamp</span><span class="o">,</span>
+        <span class="n">roleType</span> <span class="nf">varchar</span><span class="o">(</span><span class="n">255</span><span class="o">),</span>
+        <span class="n">name</span> <span class="nf">varchar</span><span class="o">(</span><span class="n">255</span><span class="o">),</span>
+        <span class="n">primary</span> <span class="nf">key</span> <span class="o">(</span><span class="n">id</span><span class="o">)</span>
+    <span class="o">)</span>
+</code></pre></div><br>
+<h3 id="enumerated">@Enumerated</h3>
+<ul>
+<li>
+<p>자바 Enum 타입을 매핑할 때 사용</p>
+</li>
+<li>
+<p>ORIDINAL 타입을 사용하지 말것.</p>
+<p>→ enum타입이 추가, 변경, 삭제 되어 순서가 달라질 경우 사이드이펙트가 생긴다.</p>
+</li>
+<li>
+<p>EnumType.ORIGINAL : ENUM 순서를 데이터베이스에 저장</p>
+</li>
+<li>
+<p>EnumType.STRING : ENUM 이름을 데이터베이스에 저장</p>
+</li>
+</ul>
+<br>
+<h3 id="temporal">@Temporal</h3>
+<ul>
+<li>날짜 타입(Date, Calendar)을 매핑할 때 사용</li>
+<li>LocalDate(년일), LocalDateTime(년월일)을 사용할 때는 생략 가능 (최신 하이버네이트 지원)</li>
+</ul>
+<br>
+<h3 id="lob">@Lob</h3>
+<ul>
+<li>데이터베이스 BLOB, CLOB 타입과 매핑</li>
+<li>매핑하는 필드 타입이 문자면 CLOB, 나머지는 BLOB 매핑</li>
+<li>CLOB : String, char[], java.sql.CLOB</li>
+<li>BLOB : bypte[], java.sql.BLOB</li>
+</ul>
+<br>
+<h3 id="transient">@Transient</h3>
+<ul>
+<li>필드 매핑이 안되게 하는 어노테이션</li>
+</ul>
+<br>
+<h3 id="column">@Column</h3>
+<table>
+<thead>
+<tr>
+<th>속성</th>
+<th>설명</th>
+<th>기본값</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>name</td>
+<td>필드와 매핑할 테이블의 칼럼 이름</td>
+<td>객체의 필드 이름</td>
+</tr>
+<tr>
+<td>insertable, updatable</td>
+<td>등록, 변경 가능 여부</td>
+<td>TRUE</td>
+</tr>
+<tr>
+<td>nullable (DDL)</td>
+<td>null 값의 허용 여부를 설정. false로 하면 DDL  생성 시에 not null 제약조건 붙음.</td>
+<td></td>
+</tr>
+<tr>
+<td>unique (DDL)</td>
+<td>@Table의 uniqueConstraints와 같지만 한 컬럼에 유니크 제약조건을 걸 때 사용</td>
+<td></td>
+</tr>
+<tr>
+<td>column Defainitaion (DDL)</td>
+<td>데이터베이스 컬럼 정보를 직접 줄 수 있다.<br />ex) varchar(100) default &lsquo;EMPTY&rsquo;</td>
+<td>필드의 자바 타입과 <br>방언 정보를 사용</td>
+</tr>
+<tr>
+<td>length (DDL)</td>
+<td>문자 길이 제약조건, String 타입에만 사용</td>
+<td>255</td>
+</tr>
+<tr>
+<td>precision, scale (DDL)</td>
+<td>BigDecimal 타입에서 사용. <br>precision: 소수점을 포함한 전체 자릿수<br>scale: 소수의 자릿수 다<br>double, float 타입에는 적용되지 않는다. 아주 큰 숫자나 소수를 다뤄야 할 때만 사용</td>
+<td>precision=19,<br>scale=2</td>
+</tr>
+</tbody>
+</table>
+<br>
+<br>
+<br>
+<h2 id="4-기본-키-매핑">4. 기본 키 매핑</h2>
+<hr>
+<ol>
+<li>
+<p>직접 할당 : <code>@Id</code> 만 사용</p>
+</li>
+<li>
+<p>자동 생성 (<code>@GeneratedValue</code>)(stategy)</p>
+<ol>
+<li>IDENTITY
+<ol>
+<li>데이터베이스에 위임, MySQL</li>
+<li>주로 MySQL, PostgreSQL, SQL Server, DB2에서 사용</li>
+<li>JPA는 보통 트랜잭션 커밋 시점에 INSERT SQL 수행</li>
+<li>AUTO_INCREMENT는 DB에 INSERT SQL을 실행 한 이후에 ID값을 알 수 있다.
+<ul>
+<li>영속성 관리 시점에서 1차캐시에 @Id값을 알 수 없다는 말이 된다.</li>
+<li>그렇기에 이 케이스에서는 persist()수행 시 바로 insert Query가 수행된다.</li>
+<li>그렇기에 IDENTITY 케이스에서는 지연쓰기가 제한된다. <br> (하지만 크게 성능 하락이 있거나 하지는 않다.)</li>
+</ul>
+</li>
+</ol>
+</li>
+<li>SEQUENCE
+<ol>
+<li>
+<p>데이터베이스 시퀀스 오브젝트 사용. ORACLE</p>
+</li>
+<li>
+<p>@SequenceGenerator 필요</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="nd">@SequenceGenerator</span><span class="o">(</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ_GENERATOR&#34;</span><span class="o">,</span>
+        <span class="n">sequenceName</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ&#34;</span><span class="o">,</span>
+        <span class="n">initialValue</span> <span class="o">=</span> <span class="n">1</span>
+<span class="o">)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member2</span> <span class="o">{</span>
+		<span class="nd">@Id</span>
+    <span class="nd">@GeneratedValue</span><span class="o">(</span><span class="n">strategy</span> <span class="o">=</span> <span class="n">GenerationType</span><span class="o">.</span><span class="na">SEQUENCE</span><span class="o">,</span> <span class="n">generator</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ_GENERATOR&#34;</span><span class="o">)</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+<span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div></li>
+<li>
+<p>영속화(persist())시 시퀀스에서 next value를 가져와서 해당 값을 @Id에 가지고 1차 캐싱을 해준다.</p>
+</li>
+<li>
+<p>지연 쓰기가 가능하다.</p>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>
+<p>Table</p>
+<ol>
+<li>
+<p>키 생성 용 테이블 사용, 모든 DB에서 사용</p>
+</li>
+<li>
+<p>키 생성 전용 테이블을 하나 만들어서 데이터베이스 시퀀스를 흉내내는 전략</p>
+</li>
+<li>
+<p>모든 데이터 베이스에서 사용할 수 있지만, 성능이 떨어진다.</p>
+</li>
+<li>
+<p>@TableGenerator 필요</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="nd">@TableGenerator</span><span class="o">(</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ_GENERATOR&#34;</span><span class="o">,</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="s">&#34;MY_SEQUENCES&#34;</span><span class="o">,</span>
+        <span class="n">pkColumnName</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ&#34;</span><span class="o">,</span> <span class="n">allocationSize</span> <span class="o">=</span> <span class="n">1</span><span class="o">)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member2</span> <span class="o">{</span>
+
+    <span class="nd">@Id</span>
+    <span class="nd">@GeneratedValue</span><span class="o">(</span><span class="n">strategy</span> <span class="o">=</span> <span class="n">GenerationType</span><span class="o">.</span><span class="na">TABLE</span><span class="o">,</span> <span class="n">generator</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ_GENERATOR&#34;</span><span class="o">)</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+<span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div></li>
+<li>
+<p>속성</p>
+<ul>
+<li><code>name</code> : 식별자 생성기 이름 (필수)</li>
+<li><code>table</code> : 키 생성 테이블 명(MEMBER_SEQ_GENERAGOR)</li>
+<li><code>pkColumnName</code> : 시퀀스 컬럼명(MY_SEQUENCES)</li>
+<li><code>pkColumnName</code> : 시퀀스 값 컬럼명</li>
+<li><code>pkColumnValue</code> : 키로 사용할 값 이름</li>
+<li><code>initialValue</code> : 초기 값, 마지막으로 생성된 값이 기준이다.</li>
+<li><code>allocationSize</code> : 시퀀스 한 번 호출에 증가하는 수(성능 최적촤에 사용됨)</li>
+<li><code>catalog</code> , <code>schema</code> : 데이터베이스 catalog, schema 이름</li>
+<li><code>uniqueConstraints(DDL)</code> : 유니크 제약 조건을 지정할 수 있다.</li>
+</ul>
+</li>
+</ol>
+</li>
+<li>
+<p>AUTO : 방언에 따라 자동 지정, 기본값</p>
+</li>
+<li>
+<p>권장하는 식별자 전략</p>
+<ol>
+<li>기본 키 제약 조건: <code>not null</code>, <code>unique</code>, <code>not update</code></li>
+<li>이 조건을 계속 만족하는 자연키는 찾기 힘들기 때문에 대리키(대체키)를 사용하자.</li>
+<li>예를 들면 주민등록번호도 기본 키로 적절하지 않다. → 기본 키가 주민등록번호가 되면 연관매핑을 맺은 다른 테이블에서도 외래키로 주민번호를 사용하기에 여기저기에 개인정보가 퍼지게 된다.</li>
+<li>권장 : Long형 + 대체키 + 키 생성전략 사용.(AUTO나 SequenceObject쓰자 + 회사내의 툴대로 사용)</li>
+</ol>
+</li>
+</ol>
+<br>
+<blockquote>
+<p>고급: 기본키 생성 전략이 SEQUENCE인 경우</p>
+</blockquote>
+<br>
+<p><strong>Q. 시퀀스를 얻느라 한 번, 엔티티를 저장한다고 한 번&hellip; 잦은 네트워크 통신이 발생하는데 더 줄일순 없을까?</strong></p>
+<p><strong>A. 최적화 방안(<code>allocationSize</code>) : 미리 인자값 갯수만큼 가져와서 사용한다.</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="nd">@SequenceGenerator</span><span class="o">(</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ_GENERATOR&#34;</span><span class="o">,</span>
+        <span class="n">sequenceName</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ&#34;</span><span class="o">,</span>
+        <span class="n">initialValue</span> <span class="o">=</span> <span class="n">1</span><span class="o">,</span> <span class="n">allocationSize</span> <span class="o">=</span> <span class="n">50</span>
+<span class="o">)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member2</span> <span class="o">{</span>
+		<span class="nd">@Id</span>
+    <span class="nd">@GeneratedValue</span><span class="o">(</span><span class="n">strategy</span> <span class="o">=</span> <span class="n">GenerationType</span><span class="o">.</span><span class="na">SEQUENCE</span><span class="o">,</span> <span class="n">generator</span> <span class="o">=</span> <span class="s">&#34;MEMBER_SEQ_GENERATOR&#34;</span><span class="o">)</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;MEMBER_ID&#34;</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+<span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>
+<p>미리 50개의 시퀀스를 가져와서 사용한다.</p>
+</li>
+<li>
+<p>그렇다면 1~100까지 100개의 next value를 가져온 다음 커밋이 롤백된다면 시퀀스는 어떻게 되는가?</p>
+<p>→ 구멍이 된다. 그리고 100까지 구멍으로 두는게 더 낫다.</p>
+<p>왜냐하면 시퀀스를 100까지 받았다고 하면 100번이라 로깅도 남기고 비즈니스 로직을 수행하게 되는데, <br> 문제가 생겨 롤백이 되었을때 시퀀스도 롤백되면 로그에는 다시 100이 남을 것이고 다음 비즈니스 로직에서 <br> 시퀀스를 받을 경우 다시 100번이 된다.
+이럴 경우 어디가 정상이고 어디가 비정상 로깅인지 확인이 어려워진다.</p>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="시퀀스-조회의-비용을-줄이는-옵션">시퀀스 조회의 비용을 줄이는 옵션</h3>
+<hr>
+<p>한 트랜잭션 안에서 여러 개의 엔티티를 저장한다면, 시퀀스의 다음 값을 얻기 위해 네트워크를 계속해서 사용하는 <br> 비용이 걱정될 수 있다. 이 때 시퀀스 한 번 호출에 증가할 수를 지정하는, <code>allocationSize 프로퍼티를 사용</code>하면 된다.</p>
+<p>시퀀스의 다음값 n개를 한 번에 땡겨오는 옵션이다. 한 번의 호출로 DB의 시퀀스 값을 n개만큼 증가시켜 놓는 것이다. <br> 그렇게 어플리케이션 메모리에서 n개의 값을 사용하다가 다 소진했다면, 다시 한 번 호출해서 n개를 또 할당받을 수 있다.</p>
+<p>여러 WAS에서 이 옵션을 사용하더라도 문제 없이 동시성 이슈가 해결된다고 한다.</p>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-29</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/jpa-entity-mapping/" data-title="엔티티매핑" data-hashtags="JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/jpa-entity-mapping/" data-hashtag="JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/jpa-entity-mapping/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/jpa-entity-mapping/" data-title="엔티티매핑" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/jpa-persistence-management-works/" class="prev" rel="prev" title="영속성관리 - 내부 동작 방식"><i class="fas fa-angle-left fa-fw"></i>영속성관리 - 내부 동작 방식</a>
+            <a href="/posts/jpa-mapping-basics/" class="next" rel="next" title="연관관계 매핑 기초">연관관계 매핑 기초<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

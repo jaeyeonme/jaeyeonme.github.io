@@ -2,11 +2,18 @@
     xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
     xmlns:xhtml="http://www.w3.org/1999/xhtml"
     ><url>
-            <loc>https://jaeyeonme.github.io/categories/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
-            <loc>https://jaeyeonme.github.io/tags/hibernate/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
-            <loc>https://jaeyeonme.github.io/tags/jpa/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
-            <loc>https://jaeyeonme.github.io/categories/jpa/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
-            <loc>https://jaeyeonme.github.io/posts/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
-            <loc>https://jaeyeonme.github.io/tags/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
-            <loc>https://jaeyeonme.github.io/posts/jpa-persistence-management-works/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
-            <loc>https://jaeyeonme.github.io/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url></urlset>
+            <loc>https://jaeyeonme.github.io/categories/</loc><lastmod>2021-12-30T10:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/tags/hibernate/</loc><lastmod>2021-12-30T10:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/tags/jpa/</loc><lastmod>2021-12-30T10:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/categories/jpa/</loc><lastmod>2021-12-30T10:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/</loc><lastmod>2021-12-30T10:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/tags/</loc><lastmod>2021-12-30T10:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/jpa-object-query-language1/</loc><lastmod>2021-12-30T10:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/</loc><lastmod>2021-12-30T10:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/jpa-value-type/</loc><lastmod>2021-12-29T14:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/jpa-proxy-and-management/</loc><lastmod>2021-12-29T13:40:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/jpa-advanced-mapping/</loc><lastmod>2021-12-29T13:20:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/jpa-mapping-various-associations/</loc><lastmod>2021-12-29T13:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/jpa-mapping-basics/</loc><lastmod>2021-12-29T12:50:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/jpa-entity-mapping/</loc><lastmod>2021-12-29T12:10:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url><url>
+            <loc>https://jaeyeonme.github.io/posts/jpa-persistence-management-works/</loc><lastmod>2021-12-29T12:00:00&#43;00:00</lastmod><changefreq>weekly</changefreq><priority>1</priority></url></urlset>
