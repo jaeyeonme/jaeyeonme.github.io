@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>쿼리 메소드 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="쿼리 메소드" />
+<meta property="og:description" content="1. 쿼리 메소드 기능  메소드 이름으로 쿼리 생성 NamedQuery @Query - 리파지토리 메소드에 쿼리 정의 파라미터 바인딩 반환 타입 페이징과 정렬 벌크성 수정 쿼리 @EntityGraph  쿼리 메소드 기능 3가지
+ 메소드 이름으로 쿼리 생성 메소드 이름으로 JPA namedQuery 호출 @Query 어노테이션을 사용해서 리포지토리 인터페이스에 쿼리 직접 정의  메소드 이름으로 쿼리 생성 메소드 이름을 분석해서 JPQL 쿼리 실행
+이름과 나이를 기준으로 회원을 조회하려면?
+순수 JPA 리포지토리
+public List&lt;Member&gt; findByUsernameAndAgeGreaterThen(String username, int age) { return em.createQuery(&#34;select m from Member m where m.username = :username and m.age &gt; :age&#34;) .setParameter(&#34;username&#34;, username) .setParameter(&#34;age&#34;, age) .getResultList(); } 
+순수 JPA 테스트 코드
+@Test public void findByUsernameAndAgeGreaterThen() { Member m1 = new Member(&#34;AAA&#34;, 10); Member m2 = new Member(&#34;AAA&#34;, 20); memberJpaRepository.save(m1); memberJpaRepository.save(m2); List&lt;Member&gt; result = memberJpaRepository.findByUsernameAndAgeGreaterThen(&#34;AAA&#34;, 15); assertThat(result.get(0).getUsername()).isEqualTo(&#34;AAA&#34;); assertThat(result.get(0).getAge()).isEqualTo(20); assertThat(result.size()).isEqualTo(1); } 
+스프링 데이터 JPA
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { List&lt;Member&gt; findByUsernameAndAgeGreaterThan(String username, int age); }  스프링 데이터 JPA는 메소드 이름을 분석해서 JPQL을 생성하고 실행  스프링 데이터 JPA가 제공하는 쿼리 메소드 기능
+ 조회: find…By ,read…By ,query…By get…By,  https://docs.spring.io/spring-data/jpa/docs/current/reference/html/ #repositories.query-methods.query-creation 예:) findHelloBy 처럼 &hellip;에 식별하기 위한 내용(설명)이 들어가도 된다.   COUNT: count…By 반환타입 long EXISTS: exists…By 반환타입 boolean 삭제: delete…By, remove…By 반환타입 long DISTINCT: findDistinct, findMemberDistinctBy LIMIT: findFirst3, findFirst, findTop, findTop3  https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.limit-query-result    참고 이 기능은 엔티티의 필드명이 변경되면 인터페이스에 정의한 메서드 이름도 꼭 함께 변경해야 한다. 그렇지 않으면 애플리케이션을 시작하는 시점에 오류가 발생한다. 이렇게 애플리케이션 로딩 시점에 오류를 인지할 수 있는 것이 스프링 데이터 JPA의 매우 큰 장점이다.
+2. JPA NamedQuery JPA의 NamedQuery를 호출할 수 있음
+@NamedQuery 어노테이션으로 Named 쿼리 정의
+@Entity @NamedQuery( name = &#34;Member.findByUsername&#34;, query = &#34;select m from Member m where m.username = :username&#34; ) public class Member { ... } 
+JPA를 직접 사용해서 Named 쿼리 호출
+public class MemberRepository { public List&lt;Member&gt; findByUsername(String username) { ... return em.createNamedQuery(&#34;Member.findByUsername&#34;, Member.class) .setParameter(&#34;username&#34;, username) .getResultList(); } } 
+스프링 데이터 JPA로 NamedQuery 사용
+@Query(name = &#34;Member.findByUsername&#34;) List&lt;Member&gt; findByUsername(@Param(&#34;username&#34;) String username); @Query 를 생략하고 메서드 이름만으로 Named 쿼리를 호출할 수 있다.
+스프링 데이터 JPA로 Named 쿼리 호출
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { // ** 여기 선언한 Member 도메인 클래스  List&lt;Member&gt; findByUsername(@Param(&#34;username&#34;) String username); }  스프링 데이터 JPA는 선언한 &ldquo;도메인 클래스 &#43; .(점) &#43; 메서드 이름&rdquo; 으로 Named 쿼리를 찾아서 실행 만약 실행할 Named 쿼리가 없으면 메서드 이름으로 쿼리 생성 전략을 사용한다. 필요하면 전략을 변경할 수 있지만 권장하지 않는다.  참고 : https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-lookup-strategies    참고 스프링 데이터 JPA를 사용하면 실무에서 Named Query를 직접 등록해서 사용하는 일은 드물다. 대신 @Query 를 사용해서 리포지토리 메소드에 쿼리를 직접 정의한다.
+3. @Query, 리포지토리 메소드에 쿼리 정의하기 메서드 JPQL 쿼리 작성 public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { @Query(&#34;select m from Member m where m.username = :username and m.age = :age&#34;) List&lt;Member&gt; findUser(@Param(&#34;username&#34;) String username, @Param(&#34;age&#34;) int age); }  @org.springframework.data.jpa.repository.Query 어노테이션을 사용 실행할 메서드에 정적 쿼리를 직접 작성하므로 이름 없는 Named 쿼리라 할 수 있음 JPA Named 쿼리처럼 애플리케이션 실행 시점에 문법 오류를 발견할 수 있음 (매우 큰 장점!)  참고 실무에서는 메소드 이름으로 쿼리 생성 기능은 파라미터가 증가하면 메서드 이름이 매우 지저분해진다." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-31T09:30:00+00:00" />
+<meta property="article:modified_time" content="2021-12-31T09:30:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="쿼리 메소드"/>
+<meta name="twitter:description" content="1. 쿼리 메소드 기능  메소드 이름으로 쿼리 생성 NamedQuery @Query - 리파지토리 메소드에 쿼리 정의 파라미터 바인딩 반환 타입 페이징과 정렬 벌크성 수정 쿼리 @EntityGraph  쿼리 메소드 기능 3가지
+ 메소드 이름으로 쿼리 생성 메소드 이름으로 JPA namedQuery 호출 @Query 어노테이션을 사용해서 리포지토리 인터페이스에 쿼리 직접 정의  메소드 이름으로 쿼리 생성 메소드 이름을 분석해서 JPQL 쿼리 실행
+이름과 나이를 기준으로 회원을 조회하려면?
+순수 JPA 리포지토리
+public List&lt;Member&gt; findByUsernameAndAgeGreaterThen(String username, int age) { return em.createQuery(&#34;select m from Member m where m.username = :username and m.age &gt; :age&#34;) .setParameter(&#34;username&#34;, username) .setParameter(&#34;age&#34;, age) .getResultList(); } 
+순수 JPA 테스트 코드
+@Test public void findByUsernameAndAgeGreaterThen() { Member m1 = new Member(&#34;AAA&#34;, 10); Member m2 = new Member(&#34;AAA&#34;, 20); memberJpaRepository.save(m1); memberJpaRepository.save(m2); List&lt;Member&gt; result = memberJpaRepository.findByUsernameAndAgeGreaterThen(&#34;AAA&#34;, 15); assertThat(result.get(0).getUsername()).isEqualTo(&#34;AAA&#34;); assertThat(result.get(0).getAge()).isEqualTo(20); assertThat(result.size()).isEqualTo(1); } 
+스프링 데이터 JPA
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { List&lt;Member&gt; findByUsernameAndAgeGreaterThan(String username, int age); }  스프링 데이터 JPA는 메소드 이름을 분석해서 JPQL을 생성하고 실행  스프링 데이터 JPA가 제공하는 쿼리 메소드 기능
+ 조회: find…By ,read…By ,query…By get…By,  https://docs.spring.io/spring-data/jpa/docs/current/reference/html/ #repositories.query-methods.query-creation 예:) findHelloBy 처럼 &hellip;에 식별하기 위한 내용(설명)이 들어가도 된다.   COUNT: count…By 반환타입 long EXISTS: exists…By 반환타입 boolean 삭제: delete…By, remove…By 반환타입 long DISTINCT: findDistinct, findMemberDistinctBy LIMIT: findFirst3, findFirst, findTop, findTop3  https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.limit-query-result    참고 이 기능은 엔티티의 필드명이 변경되면 인터페이스에 정의한 메서드 이름도 꼭 함께 변경해야 한다. 그렇지 않으면 애플리케이션을 시작하는 시점에 오류가 발생한다. 이렇게 애플리케이션 로딩 시점에 오류를 인지할 수 있는 것이 스프링 데이터 JPA의 매우 큰 장점이다.
+2. JPA NamedQuery JPA의 NamedQuery를 호출할 수 있음
+@NamedQuery 어노테이션으로 Named 쿼리 정의
+@Entity @NamedQuery( name = &#34;Member.findByUsername&#34;, query = &#34;select m from Member m where m.username = :username&#34; ) public class Member { ... } 
+JPA를 직접 사용해서 Named 쿼리 호출
+public class MemberRepository { public List&lt;Member&gt; findByUsername(String username) { ... return em.createNamedQuery(&#34;Member.findByUsername&#34;, Member.class) .setParameter(&#34;username&#34;, username) .getResultList(); } } 
+스프링 데이터 JPA로 NamedQuery 사용
+@Query(name = &#34;Member.findByUsername&#34;) List&lt;Member&gt; findByUsername(@Param(&#34;username&#34;) String username); @Query 를 생략하고 메서드 이름만으로 Named 쿼리를 호출할 수 있다.
+스프링 데이터 JPA로 Named 쿼리 호출
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { // ** 여기 선언한 Member 도메인 클래스  List&lt;Member&gt; findByUsername(@Param(&#34;username&#34;) String username); }  스프링 데이터 JPA는 선언한 &ldquo;도메인 클래스 &#43; .(점) &#43; 메서드 이름&rdquo; 으로 Named 쿼리를 찾아서 실행 만약 실행할 Named 쿼리가 없으면 메서드 이름으로 쿼리 생성 전략을 사용한다. 필요하면 전략을 변경할 수 있지만 권장하지 않는다.  참고 : https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-lookup-strategies    참고 스프링 데이터 JPA를 사용하면 실무에서 Named Query를 직접 등록해서 사용하는 일은 드물다. 대신 @Query 를 사용해서 리포지토리 메소드에 쿼리를 직접 정의한다.
+3. @Query, 리포지토리 메소드에 쿼리 정의하기 메서드 JPQL 쿼리 작성 public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { @Query(&#34;select m from Member m where m.username = :username and m.age = :age&#34;) List&lt;Member&gt; findUser(@Param(&#34;username&#34;) String username, @Param(&#34;age&#34;) int age); }  @org.springframework.data.jpa.repository.Query 어노테이션을 사용 실행할 메서드에 정적 쿼리를 직접 작성하므로 이름 없는 Named 쿼리라 할 수 있음 JPA Named 쿼리처럼 애플리케이션 실행 시점에 문법 오류를 발견할 수 있음 (매우 큰 장점!)  참고 실무에서는 메소드 이름으로 쿼리 생성 기능은 파라미터가 증가하면 메서드 이름이 매우 지저분해진다."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/spring-data-jpa-common-interface/" /><link rel="next" href="https://jaeyeonme.github.io/posts/spring-data-jpa-extension/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "쿼리 메소드",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/spring-data-jpa-query-method\/"
+        },"genre": "posts","keywords": "Spring Data JPA, Hibernate","wordcount":  1835 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/spring-data-jpa-query-method\/","datePublished": "2021-12-31T09:30:00+00:00","dateModified": "2021-12-31T09:30:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">쿼리 메소드</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/spring-data-jpa/"><i class="far fa-folder fa-fw"></i>Spring Data JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-31">2021-12-31</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;1835 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;9 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/spring-data-jpa.png"
+        data-srcset="/images/JPA/spring-data-jpa.png, /images/JPA/spring-data-jpa.png 1.5x, /images/JPA/spring-data-jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/spring-data-jpa.png"
+        title="/images/JPA/spring-data-jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-쿼리-메소드-기능">1. 쿼리 메소드 기능</a>
+      <ul>
+        <li><a href="#메소드-이름으로-쿼리-생성">메소드 이름으로 쿼리 생성</a></li>
+      </ul>
+    </li>
+    <li><a href="#2-jpa-namedquery">2. JPA NamedQuery</a></li>
+    <li><a href="#3-query-리포지토리-메소드에-쿼리-정의하기">3. @Query, 리포지토리 메소드에 쿼리 정의하기</a>
+      <ul>
+        <li><a href="#메서드-jpql-쿼리-작성">메서드 JPQL 쿼리 작성</a></li>
+      </ul>
+    </li>
+    <li><a href="#4-query-값-dto-조회하기">4. @Query, 값, DTO 조회하기</a></li>
+    <li><a href="#5-파라미터-바인딩">5. 파라미터 바인딩</a>
+      <ul>
+        <li><a href="#파라미터-바인딩"><strong>파라미터 바인딩</strong></a></li>
+        <li><a href="#컬렉션-파라미터-바인딩">컬렉션 파라미터 바인딩</a></li>
+      </ul>
+    </li>
+    <li><a href="#6-반환-타입">6. 반환 타입</a></li>
+    <li><a href="#7-순수-jpa-페이징과-정렬">7. 순수 JPA 페이징과 정렬</a></li>
+    <li><a href="#8-스프링-데이터-jpa-페이징과-정렬">8. 스프링 데이터 JPA 페이징과 정렬</a></li>
+    <li><a href="#9-벌크성-수정-쿼리">9. 벌크성 수정 쿼리</a></li>
+    <li><a href="#10-entitygraph">10. @EntityGraph</a></li>
+    <li><a href="#11-jpa-hint--lock">11. JPA Hint &amp; Lock</a>
+      <ul>
+        <li><a href="#jpa-hint">JPA Hint</a></li>
+        <li><a href="#lock">Lock</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-쿼리-메소드-기능">1. 쿼리 메소드 기능</h2>
+<ul>
+<li>메소드 이름으로 쿼리 생성</li>
+<li>NamedQuery</li>
+<li>@Query - 리파지토리 메소드에 쿼리 정의</li>
+<li>파라미터 바인딩</li>
+<li>반환 타입</li>
+<li>페이징과 정렬</li>
+<li>벌크성 수정 쿼리</li>
+<li>@EntityGraph</li>
+</ul>
+<br>
+<br>
+<p><strong>쿼리 메소드 기능 3가지</strong></p>
+<ul>
+<li>메소드 이름으로 쿼리 생성</li>
+<li>메소드 이름으로 JPA namedQuery 호출</li>
+<li><code>@Query</code> 어노테이션을 사용해서 리포지토리 인터페이스에 쿼리 직접 정의</li>
+</ul>
+<br>
+<br>
+<h3 id="메소드-이름으로-쿼리-생성">메소드 이름으로 쿼리 생성</h3>
+<p>메소드 이름을 분석해서 JPQL 쿼리 실행</p>
+<p>이름과 나이를 기준으로 회원을 조회하려면?</p>
+<br>
+<br>
+<p><strong>순수 JPA 리포지토리</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsernameAndAgeGreaterThen</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">,</span> <span class="kt">int</span> <span class="n">age</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select m from Member m where m.username = :username and m.age &gt; :age&#34;</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">setParameter</span><span class="o">(</span><span class="s">&#34;username&#34;</span><span class="o">,</span> <span class="n">username</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">setParameter</span><span class="o">(</span><span class="s">&#34;age&#34;</span><span class="o">,</span> <span class="n">age</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>순수 JPA 테스트 코드</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">findByUsernameAndAgeGreaterThen</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">Member</span> <span class="n">m1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;AAA&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">);</span>
+    <span class="n">Member</span> <span class="n">m2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;AAA&#34;</span><span class="o">,</span> <span class="n">20</span><span class="o">);</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">m1</span><span class="o">);</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">m2</span><span class="o">);</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">findByUsernameAndAgeGreaterThen</span><span class="o">(</span><span class="s">&#34;AAA&#34;</span><span class="o">,</span> <span class="n">15</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">0</span><span class="o">).</span><span class="na">getUsername</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="s">&#34;AAA&#34;</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">0</span><span class="o">).</span><span class="na">getAge</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">20</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result</span><span class="o">.</span><span class="na">size</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">1</span><span class="o">);</span>
+
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>스프링 데이터 JPA</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepository</span> <span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="o">{</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsernameAndAgeGreaterThan</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">,</span> <span class="kt">int</span> <span class="n">age</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>스프링 데이터 JPA는 메소드 이름을 분석해서 JPQL을 생성하고 실행</li>
+</ul>
+<br>
+<br>
+<p><strong>스프링 데이터 JPA가 제공하는 쿼리 메소드 기능</strong></p>
+<ul>
+<li>조회: find…By ,read…By ,query…By get…By,
+<ul>
+<li><a href="https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-creation" target="_blank" rel="noopener noreffer">https://docs.spring.io/spring-data/jpa/docs/current/reference/html/ #repositories.query-methods.query-creation</a></li>
+<li>예:) findHelloBy 처럼 &hellip;에 식별하기 위한 내용(설명)이 들어가도 된다.</li>
+</ul>
+</li>
+<li>COUNT: count…By 반환타입 <code>long</code></li>
+<li>EXISTS: exists…By 반환타입 <code>boolean</code></li>
+<li>삭제: delete…By, remove…By 반환타입 <code>long</code></li>
+<li>DISTINCT: findDistinct, findMemberDistinctBy</li>
+<li>LIMIT: findFirst3, findFirst, findTop, findTop3
+<ul>
+<li><a href="https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.limit-query-result" target="_blank" rel="noopener noreffer">https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.limit-query-result</a></li>
+</ul>
+</li>
+</ul>
+<br>
+<p><strong>참고</strong> <br> 이 기능은 엔티티의 필드명이 변경되면 인터페이스에 정의한 메서드 이름도 꼭 함께 변경해야 한다. <br> 그렇지 않으면 애플리케이션을 시작하는 시점에 오류가 발생한다. <br>
+이렇게 애플리케이션 로딩 시점에 오류를 인지할 수 있는 것이 스프링 데이터 JPA의 매우 큰 장점이다.</p>
+<br>
+<br>
+<br>
+<h2 id="2-jpa-namedquery">2. JPA NamedQuery</h2>
+<p>JPA의 NamedQuery를 호출할 수 있음</p>
+<p><code>@NamedQuery</code> 어노테이션으로 Named 쿼리 정의</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Entity</span>
+<span class="nd">@NamedQuery</span><span class="o">(</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s">&#34;Member.findByUsername&#34;</span><span class="o">,</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="s">&#34;select m from Member m where m.username = :username&#34;</span>
+<span class="o">)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+		
+		<span class="o">...</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>JPA를 직접 사용해서 Named 쿼리 호출</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberRepository</span> <span class="o">{</span>
+
+    <span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">)</span> <span class="o">{</span>
+            <span class="o">...</span>
+    <span class="k">return</span> <span class="n">em</span><span class="o">.</span><span class="na">createNamedQuery</span><span class="o">(</span><span class="s">&#34;Member.findByUsername&#34;</span><span class="o">,</span> <span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setParameter</span><span class="o">(</span><span class="s">&#34;username&#34;</span><span class="o">,</span> <span class="n">username</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>스프링 데이터 JPA로 NamedQuery 사용</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Query</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;Member.findByUsername&#34;</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="nd">@Param</span><span class="o">(</span><span class="s">&#34;username&#34;</span><span class="o">)</span> <span class="n">String</span> <span class="n">username</span><span class="o">);</span>
+</code></pre></div><p><code>@Query</code> 를 생략하고 메서드 이름만으로 Named 쿼리를 호출할 수 있다.</p>
+<br>
+<br>
+<p><strong>스프링 데이터 JPA로 Named 쿼리 호출</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepository</span> 
+			<span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="o">{</span>  <span class="c1">// ** 여기 선언한 Member 도메인 클래스
+</span><span class="c1"></span>
+	<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="nd">@Param</span><span class="o">(</span><span class="s">&#34;username&#34;</span><span class="o">)</span> <span class="n">String</span> <span class="n">username</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>스프링 데이터 JPA는 선언한 &ldquo;도메인 클래스 + .(점) + 메서드 이름&rdquo; 으로 Named 쿼리를 찾아서 실행</li>
+<li>만약 실행할 Named 쿼리가 없으면 메서드 이름으로 쿼리 생성 전략을 사용한다.</li>
+<li>필요하면 전략을 변경할 수 있지만 권장하지 않는다.
+<ul>
+<li>참고 : <a href="https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-lookup-strategies" target="_blank" rel="noopener noreffer">https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-lookup-strategies</a></li>
+</ul>
+</li>
+</ul>
+<br>
+<p><strong>참고</strong> <br> 스프링 데이터 JPA를 사용하면 실무에서 Named Query를 직접 등록해서 사용하는 일은 드물다. <br> 대신 <code>@Query</code> 를 사용해서 리포지토리 메소드에 쿼리를 직접 정의한다.</p>
+<br>
+<br>
+<br>
+<h2 id="3-query-리포지토리-메소드에-쿼리-정의하기">3. @Query, 리포지토리 메소드에 쿼리 정의하기</h2>
+<h3 id="메서드-jpql-쿼리-작성">메서드 JPQL 쿼리 작성</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepository</span> <span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="o">{</span>
+
+    <span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;select m from Member m where m.username = :username and m.age = :age&#34;</span><span class="o">)</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findUser</span><span class="o">(</span><span class="nd">@Param</span><span class="o">(</span><span class="s">&#34;username&#34;</span><span class="o">)</span> <span class="n">String</span> <span class="n">username</span><span class="o">,</span> <span class="nd">@Param</span><span class="o">(</span><span class="s">&#34;age&#34;</span><span class="o">)</span> <span class="kt">int</span> <span class="n">age</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li><code>@org.springframework.data.jpa.repository.Query</code> 어노테이션을 사용</li>
+<li>실행할 메서드에 정적 쿼리를 직접 작성하므로 이름 없는 Named 쿼리라 할 수 있음</li>
+<li>JPA Named 쿼리처럼 애플리케이션 실행 시점에 문법 오류를 발견할 수 있음 (매우 큰 장점!)</li>
+</ul>
+<br>
+<p><strong>참고</strong> <br> 실무에서는 메소드 이름으로 쿼리 생성 기능은 파라미터가 증가하면 메서드 이름이 매우 지저분해진다. <br> 따라서 <code>@Query</code> 기능을 자주 사용하게 된다.</p>
+<br>
+<br>
+<br>
+<h2 id="4-query-값-dto-조회하기">4. @Query, 값, DTO 조회하기</h2>
+<p><strong>단순히 값 하나를 조회</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;select m.username from Member m&#34;</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="nf">findUserNameList</span><span class="o">();</span>
+</code></pre></div><p>JPA값 타입(<code>@Embedded</code>)도 이 방식으로 조회할 수 있다.</p>
+<br>
+<br>
+<p><strong>DTO로 직접 조회</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;select new study.datajpa.dto.MemberDto(m.id, m.username, t.name) from Member m join m.team t&#34;</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="nf">findMemberDto</span><span class="o">();</span>
+</code></pre></div><br>
+<p>주의! DTO로 직접 조회 하려면 JPA의 <code>new</code> 명령어를 사용해야 한다. 그리고 다음과 같이 생성자가 맞는 DTO가 필요하다. (JPA와 사용방식이 동일하다.)</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Data</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberDto</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">username</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">teamName</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nf">MemberDto</span><span class="o">(</span><span class="n">Long</span> <span class="n">id</span><span class="o">,</span> <span class="n">String</span> <span class="n">username</span><span class="o">,</span> <span class="n">String</span> <span class="n">teamName</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">id</span> <span class="o">=</span> <span class="n">id</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">username</span> <span class="o">=</span> <span class="n">username</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">teamName</span> <span class="o">=</span> <span class="n">teamName</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h2 id="5-파라미터-바인딩">5. 파라미터 바인딩</h2>
+<ul>
+<li>위치 기반 (거의 안씀)</li>
+<li>이름 기반</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">select</span> <span class="n">m</span> <span class="n">from</span> <span class="n">Member</span> <span class="n">m</span> <span class="n">where</span> <span class="n">m</span><span class="o">.</span><span class="na">username</span> <span class="o">=</span> <span class="o">?</span><span class="n">0</span>    <span class="c1">//위치 기반 
+</span><span class="c1"></span><span class="n">select</span> <span class="n">m</span> <span class="n">from</span> <span class="n">Member</span> <span class="n">m</span> <span class="n">where</span> <span class="n">m</span><span class="o">.</span><span class="na">username</span> <span class="o">=</span> <span class="o">:</span><span class="n">name</span> <span class="c1">//이름 기반
+</span></code></pre></div><br>
+<h3 id="파라미터-바인딩"><strong>파라미터 바인딩</strong></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kn">import</span> <span class="nn">org.springframework.data.repository.query.Param</span>
+
+<span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepository</span> <span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="o">{</span>
+
+    <span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;select m from Member m where m.username = :name&#34;</span><span class="o">)</span> 
+    <span class="n">Member</span> <span class="nf">findMembers</span><span class="o">(</span><span class="nd">@Param</span><span class="o">(</span><span class="s">&#34;name&#34;</span><span class="o">)</span> <span class="n">String</span> <span class="n">username</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<p><strong>참고</strong> <br> 코드 가독성과 유지보수를 위해 이름 기반 파라미터 바인딩을 사용하자 (위치기반은 순서 실수가 바뀌면&hellip;)</p>
+<br>
+<h3 id="컬렉션-파라미터-바인딩">컬렉션 파라미터 바인딩</h3>
+<p><code>Collection</code> 타입으로 in절 지원</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;select m from Member m where m.username in :names&#34;</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByNames</span><span class="o">(</span><span class="nd">@Param</span><span class="o">(</span><span class="s">&#34;names&#34;</span><span class="o">)</span> <span class="n">Collection</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">names</span><span class="o">);</span>
+</code></pre></div><br>
+<br>
+<br>
+<h2 id="6-반환-타입">6. 반환 타입</h2>
+<p>스프링 데이터 JPA는 유연한 반환 타입 지원</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findListByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">);</span>           <span class="c1">// 컬렉션
+</span><span class="c1"></span><span class="n">Member</span> <span class="nf">findMemberByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">);</span>               <span class="c1">// 단건
+</span><span class="c1"></span><span class="n">Optional</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findOptionalByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">);</span>   <span class="c1">// 단건 Optional
+</span></code></pre></div><p>스프링 데이터 JPA 공식 문서 : <a href="https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repository-query-return-types" target="_blank" rel="noopener noreffer">https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repository-query-return-types</a></p>
+<br>
+<p><strong>조회 결과가 많거나 없으면?</strong></p>
+<ul>
+<li>컬렉션
+<ul>
+<li>결과 없음 : 빈 컬렉션 반환</li>
+</ul>
+</li>
+<li>단건 조회
+<ul>
+<li>결과 없음 : <code>null</code> 반환</li>
+<li>결과가 2건 이상 : <code>javax.persistence.NonUniqueResultException</code> 예외 발생</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<p><strong>참고</strong> <br> 단건으로 지정한 메서드를 호출하면 스프링 데이터 JPA는 내부에서 JPQL의
+<code>Query.getSingleResult()</code> <br> 메서드를 호출한다. 이 메서드를 호출했을 떄 조회 결과가 없으면 <code>javax.persistence.NoResultException</code> 예외가 <br> 발생하는데 개발자 입장에서 다루기가 상당히 불편한다. <br> 스프링 데이터 JPA는 단건을 조회할 때 이 예외가 발생하면 예외를 무시하고 대신에 <code>null</code> 을 반환한다.</p>
+<br>
+<br>
+<br>
+<h2 id="7-순수-jpa-페이징과-정렬">7. 순수 JPA 페이징과 정렬</h2>
+<p>다음 조건으로 페이징과 정렬을 사용하는 예.</p>
+<ul>
+<li>검색 조건 : 나이가 10살</li>
+<li>정렬 조건 : 이름으로 내림차순</li>
+<li>페이징 조건 : 첫 번째 페이지, 페이지당 보여줄 데이터는 3건</li>
+</ul>
+<br>
+<br>
+<p><strong>JPA 페이징 리포지토리 코드</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByPage</span><span class="o">(</span><span class="kt">int</span> <span class="n">age</span><span class="o">,</span> <span class="kt">int</span> <span class="n">offset</span><span class="o">,</span> <span class="kt">int</span> <span class="n">limit</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select m from Member m where m.age = :age order by m.username desc&#34;</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setParameter</span><span class="o">(</span><span class="s">&#34;age&#34;</span><span class="o">,</span> <span class="n">age</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setFirstResult</span><span class="o">(</span><span class="n">offset</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setMaxResults</span><span class="o">(</span><span class="n">limit</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+<span class="o">}</span>
+
+<span class="kd">public</span> <span class="kt">long</span> <span class="nf">totalCount</span><span class="o">(</span><span class="kt">int</span> <span class="n">age</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select count(m) from Member m where m.age = :age&#34;</span><span class="o">,</span> <span class="n">Long</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">setParameter</span><span class="o">(</span><span class="s">&#34;age&#34;</span><span class="o">,</span> <span class="n">age</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">getSingleResult</span><span class="o">();</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>JPA 페이징 테스트 코드</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">paging</span><span class="o">()</span> <span class="o">{</span>
+    <span class="c1">// given
+</span><span class="c1"></span>    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member2&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member3&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member4&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member5&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+
+    <span class="kt">int</span> <span class="n">age</span> <span class="o">=</span> <span class="n">10</span><span class="o">;</span>
+    <span class="kt">int</span> <span class="n">offset</span> <span class="o">=</span> <span class="n">0</span><span class="o">;</span>
+    <span class="kt">int</span> <span class="n">limit</span> <span class="o">=</span> <span class="n">3</span><span class="o">;</span>
+
+    <span class="c1">// when
+</span><span class="c1"></span>    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">members</span> <span class="o">=</span> <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">findByPage</span><span class="o">(</span><span class="n">age</span><span class="o">,</span> <span class="n">offset</span><span class="o">,</span> <span class="n">limit</span><span class="o">);</span>
+    <span class="kt">long</span> <span class="n">totalCount</span> <span class="o">=</span> <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">totalCount</span><span class="o">(</span><span class="n">age</span><span class="o">);</span>
+
+    <span class="c1">// 페이지 계산 공식 적용...
+</span><span class="c1"></span>    <span class="c1">// totalPage = totalCount / size ...
+</span><span class="c1"></span>    <span class="c1">// 마지막 페이지 ...
+</span><span class="c1"></span>    <span class="c1">// 최초 페이지 ...
+</span><span class="c1"></span>
+    <span class="c1">// then
+</span><span class="c1"></span>    <span class="n">assertThat</span><span class="o">(</span><span class="n">members</span><span class="o">.</span><span class="na">size</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">3</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">totalCount</span><span class="o">).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">5</span><span class="o">);</span>
+
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<br>
+<h2 id="8-스프링-데이터-jpa-페이징과-정렬">8. 스프링 데이터 JPA 페이징과 정렬</h2>
+<p><strong>페이징과 정렬 파라미터</strong></p>
+<ul>
+<li><code>org.springframework.data.domain.Sort</code> : 정렬 기능</li>
+<li><code>org.springframework.data.domain.Pageable</code> : 페이징 기능 (내부에 <code>Sort</code> 포함)</li>
+</ul>
+<br>
+<p><strong>특별한 반환 타입</strong></p>
+<ul>
+<li><code>[org.springframework.data.domain.Page](http://org.springframework.data.domain.Page)</code> <br> : 추가 count 쿼리 결과를 포함하는 페이징</li>
+<li><code>org.springframework.data.domain.Slice</code> <br> : 추가 count 쿼리 없이 다음 페이지만 확인 가능
+(내부적으로 limit + 1조회)</li>
+<li><code>List</code>(자바 컬렉션) : 추가 count 쿼리 없이 결과만 반환</li>
+</ul>
+<br>
+<br>
+<p><strong>페이징과 정렬 사용 예제</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">name</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">);</span>  <span class="c1">//count 쿼리 사용 
+</span><span class="c1"></span><span class="n">Slice</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">name</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">);</span> <span class="c1">//count 쿼리 사용 안함 
+</span><span class="c1"></span><span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">name</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">);</span>  <span class="c1">//count 쿼리 사용 안함 
+</span><span class="c1"></span><span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">name</span><span class="o">,</span> <span class="n">Sort</span> <span class="n">sort</span><span class="o">);</span>
+</code></pre></div><p>다음 조건으로 페이징과 정렬을 사용하는 예.</p>
+<ul>
+<li>검색 조건 : 나이가 10살</li>
+<li>정렬 조건 : 이름으로 내림차순</li>
+<li>페이징 조건 : 첫 번째 페이지, 페이지당 보여줄 데이터는 3건</li>
+</ul>
+<br>
+<br>
+<p><strong>Page 사용 예제 정의 코드</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepository</span> <span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="o">{</span>
+
+		<span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByAge</span><span class="o">(</span><span class="kt">int</span> <span class="n">age</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>Page 사용 예제 실행 코드</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">paging</span><span class="o">()</span> <span class="o">{</span>
+    <span class="c1">// given
+</span><span class="c1"></span>    <span class="n">memberRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member2&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member3&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member4&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member5&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+
+    <span class="kt">int</span> <span class="n">age</span> <span class="o">=</span> <span class="n">10</span><span class="o">;</span>
+    <span class="n">PageRequest</span> <span class="n">pageRequest</span> <span class="o">=</span> <span class="n">PageRequest</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">0</span><span class="o">,</span> <span class="n">3</span><span class="o">,</span> <span class="n">Sort</span><span class="o">.</span><span class="na">by</span><span class="o">(</span><span class="n">Sort</span><span class="o">.</span><span class="na">Direction</span><span class="o">.</span><span class="na">DESC</span><span class="o">,</span> <span class="s">&#34;username&#34;</span><span class="o">));</span>
+
+    <span class="c1">// when
+</span><span class="c1"></span>    <span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">page</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findByAge</span><span class="o">(</span><span class="n">age</span><span class="o">,</span> <span class="n">pageRequest</span><span class="o">);</span>
+
+    <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="n">toMap</span> <span class="o">=</span> <span class="n">page</span><span class="o">.</span><span class="na">map</span><span class="o">(</span><span class="n">m</span> <span class="o">-&gt;</span> <span class="k">new</span> <span class="n">MemberDto</span><span class="o">(</span><span class="n">m</span><span class="o">.</span><span class="na">getId</span><span class="o">(),</span> <span class="n">m</span><span class="o">.</span><span class="na">getUsername</span><span class="o">(),</span> <span class="kc">null</span><span class="o">));</span>
+
+    <span class="c1">// then
+</span><span class="c1"></span>    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">content</span> <span class="o">=</span> <span class="n">page</span><span class="o">.</span><span class="na">getContent</span><span class="o">();</span>            <span class="c1">// 조회된 데이터
+</span><span class="c1"></span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">content</span><span class="o">.</span><span class="na">size</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">3</span><span class="o">);</span>             <span class="c1">// 조회된 데이터 수
+</span><span class="c1"></span>    <span class="n">assertThat</span><span class="o">(</span><span class="n">page</span><span class="o">.</span><span class="na">getTotalElements</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">5</span><span class="o">);</span>    <span class="c1">// 전체 데이터 수
+</span><span class="c1"></span>    <span class="n">assertThat</span><span class="o">(</span><span class="n">page</span><span class="o">.</span><span class="na">getNumber</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">0</span><span class="o">);</span>           <span class="c1">// 페이지 번호
+</span><span class="c1"></span>    <span class="n">assertThat</span><span class="o">(</span><span class="n">page</span><span class="o">.</span><span class="na">getTotalPages</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">2</span><span class="o">);</span>       <span class="c1">// 전체 페이저 번호
+</span><span class="c1"></span>    <span class="n">assertThat</span><span class="o">(</span><span class="n">page</span><span class="o">.</span><span class="na">isFirst</span><span class="o">()).</span><span class="na">isTrue</span><span class="o">();</span>                 <span class="c1">// 첫 번째 항목인가?
+</span><span class="c1"></span>    <span class="n">assertThat</span><span class="o">(</span><span class="n">page</span><span class="o">.</span><span class="na">hasNext</span><span class="o">()).</span><span class="na">isTrue</span><span class="o">();</span>                 <span class="c1">// 다음 페이지가 있는가?
+</span><span class="c1"></span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>두 번째 파라미터로 받은 <code>Pageable</code> 은 인터페이스다. 따라서 실제 사용할 때는 해당 인터페이스를 구현한
+<code>org.springframework.data.domain.PageRequest</code> 객체를 사용한다.</li>
+<li><code>PageRequest</code> 생성자의 첫 번째 파라미터에는 현재 페이지를, 두 번째 파라미터에는 조회할 데이터 수를 입력한다. <br> 여기에 추가로 정렬 정보도 파라미터로 사용할 수 있다. 참고로 페이지는 0부터 시작한다.</li>
+</ul>
+<br>
+<p><strong>주의</strong>: Page는 1부터 시작이 아니라 0부터 시작이다.</p>
+<br>
+<br>
+<p><strong>Page 인터페이스</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">Page</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="kd">extends</span> <span class="n">Slice</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="o">{</span> 
+		<span class="kt">int</span> <span class="nf">getTotalPages</span><span class="o">();</span> <span class="c1">//전체 페이지 수 
+</span><span class="c1"></span>		<span class="kt">long</span> <span class="nf">getTotalElements</span><span class="o">();</span> <span class="c1">//전체 데이터 수 
+</span><span class="c1"></span>		<span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span> <span class="nf">map</span><span class="o">(</span><span class="n">Function</span><span class="o">&lt;?</span> <span class="kd">super</span> <span class="n">T</span><span class="o">,</span> <span class="o">?</span> <span class="kd">extends</span> <span class="n">U</span><span class="o">&gt;</span> <span class="n">converter</span><span class="o">);</span> <span class="c1">//변환기 
+</span><span class="c1"></span><span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>Slice 인터페이스</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">Slice</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="kd">extends</span> <span class="n">Streamable</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="o">{</span>
+	<span class="kt">int</span> <span class="nf">getNumber</span><span class="o">();</span>              <span class="c1">//현재 페이지 
+</span><span class="c1"></span>	<span class="kt">int</span> <span class="nf">getSize</span><span class="o">();</span>                <span class="c1">//페이지 크기 
+</span><span class="c1"></span>	<span class="kt">int</span> <span class="nf">getNumberOfElements</span><span class="o">();</span>    <span class="c1">//현재 페이지에 나올 데이터 수 
+</span><span class="c1"></span>	<span class="n">List</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="nf">getContent</span><span class="o">();</span>         <span class="c1">//조회된 데이터 
+</span><span class="c1"></span>	<span class="kt">boolean</span> <span class="nf">hasContent</span><span class="o">();</span>         <span class="c1">//조회된 데이터 존재 여부 
+</span><span class="c1"></span>	<span class="n">Sort</span> <span class="nf">getSort</span><span class="o">();</span>               <span class="c1">//정렬 정보 
+</span><span class="c1"></span>	<span class="kt">boolean</span> <span class="nf">isFirst</span><span class="o">();</span>            <span class="c1">//현재 페이지가 첫 페이지 인지 여부 
+</span><span class="c1"></span>	<span class="kt">boolean</span> <span class="nf">isLast</span><span class="o">();</span>             <span class="c1">//현재 페이지가 마지막 페이지 인지 여부 
+</span><span class="c1"></span>	<span class="kt">boolean</span> <span class="nf">hasNext</span><span class="o">();</span>            <span class="c1">//다음 페이지 여부 
+</span><span class="c1"></span>	<span class="kt">boolean</span> <span class="nf">hasPrevious</span><span class="o">();</span>        <span class="c1">//이전 페이지 여부 
+</span><span class="c1"></span>	<span class="n">Pageable</span> <span class="nf">getPageable</span><span class="o">();</span>       <span class="c1">//페이지 요청 정보 
+</span><span class="c1"></span>	<span class="n">Pageable</span> <span class="nf">nextPageable</span><span class="o">();</span>      <span class="c1">//다음 페이지 객체 
+</span><span class="c1"></span>	<span class="n">Pageable</span> <span class="nf">previousPageable</span><span class="o">();</span>  <span class="c1">//이전 페이지 객체 
+</span><span class="c1"></span>	<span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span> <span class="n">Slice</span><span class="o">&lt;</span><span class="n">U</span><span class="o">&gt;</span> <span class="nf">map</span><span class="o">(</span><span class="n">Function</span><span class="o">&lt;?</span> <span class="kd">super</span> <span class="n">T</span><span class="o">,</span> <span class="o">?</span> <span class="kd">extends</span> <span class="n">U</span><span class="o">&gt;</span> <span class="n">converter</span><span class="o">);</span> <span class="c1">//변환기
+</span><span class="c1"></span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>참고: Count 쿼리를 다음과 같이 분리할 수 있음</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Query</span><span class="o">(</span><span class="n">value</span> <span class="o">=</span> <span class="err">“</span><span class="n">select</span> <span class="n">m</span> <span class="n">from</span> <span class="n">Member</span> <span class="n">m</span><span class="err">”</span><span class="o">,</span> 
+				<span class="n">countQuery</span> <span class="o">=</span> <span class="err">“</span><span class="n">select</span> <span class="nf">count</span><span class="o">(</span><span class="n">m</span><span class="o">.</span><span class="na">username</span><span class="o">)</span> <span class="n">from</span> <span class="n">Member</span> <span class="n">m</span><span class="err">”</span><span class="o">)</span> 
+<span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberAllCountBy</span><span class="o">(</span><span class="n">Pageable</span> <span class="n">pageable</span><span class="o">);</span>
+</code></pre></div><br>
+<br>
+<p><strong>Top, First 사용 참고</strong></p>
+<p><a href="https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.limitquery-result" target="_blank" rel="noopener noreffer">https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.limitquery-result</a></p>
+<p><code>List&lt;Member&gt; findTop3By();</code></p>
+<br>
+<p><strong>페이지를 유지하면서 엔티티를 DTO로 변환한기</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">page</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findByAge</span><span class="o">(</span><span class="n">10</span><span class="o">,</span> <span class="n">pageRequest</span><span class="o">);</span>
+<span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="n">dtoPage</span> <span class="o">=</span> <span class="n">page</span><span class="o">.</span><span class="na">map</span><span class="o">(</span><span class="n">m</span> <span class="o">-&gt;</span> <span class="k">new</span> <span class="n">MemberDto</span><span class="o">());</span>
+</code></pre></div><br>
+<p><strong>참고</strong>: 전체 count 쿼리는 매우 무겁다.</p>
+<br>
+<br>
+<br>
+<h2 id="9-벌크성-수정-쿼리">9. 벌크성 수정 쿼리</h2>
+<p><strong>JPA를 사용한 벌크성 수정 쿼리</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kt">int</span> <span class="nf">bulkAgePlus</span><span class="o">(</span><span class="kt">int</span> <span class="n">age</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;update Member m set m.age = m.age + 1 where m.age &gt;= :age&#34;</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">setParameter</span><span class="o">(</span><span class="s">&#34;age&#34;</span><span class="o">,</span> <span class="n">age</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">executeUpdate</span><span class="o">();</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>JPA를 사용한 벌크성 수정 쿼리 테스트</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">bulkUpdate</span><span class="o">()</span> <span class="o">{</span>
+    <span class="c1">// given
+</span><span class="c1"></span>    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">));</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member2&#34;</span><span class="o">,</span> <span class="n">19</span><span class="o">));</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member3&#34;</span><span class="o">,</span> <span class="n">20</span><span class="o">));</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member4&#34;</span><span class="o">,</span> <span class="n">21</span><span class="o">));</span>
+    <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member5&#34;</span><span class="o">,</span> <span class="n">40</span><span class="o">));</span>
+
+    <span class="c1">// when
+</span><span class="c1"></span>    <span class="kt">int</span> <span class="n">resultCount</span> <span class="o">=</span> <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">bulkAgePlus</span><span class="o">(</span><span class="n">20</span><span class="o">);</span>
+
+    <span class="c1">// then
+</span><span class="c1"></span>    <span class="n">assertThat</span><span class="o">(</span><span class="n">resultCount</span><span class="o">).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">3</span><span class="o">);</span>
+
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>스프링 데이터 JPA를 사용한 벌크성 수정 쿼리</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Modifying</span><span class="o">(</span><span class="n">clearAutomatically</span> <span class="o">=</span> <span class="kc">true</span><span class="o">)</span>
+<span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;update Member m set m.age = m.age + 1 where m.age &gt;= :age&#34;</span><span class="o">)</span>
+<span class="kt">int</span> <span class="nf">bulkAgePlus</span><span class="o">(</span><span class="nd">@Param</span><span class="o">(</span><span class="s">&#34;age&#34;</span><span class="o">)</span> <span class="kt">int</span> <span class="n">age</span><span class="o">);</span>
+</code></pre></div><ul>
+<li>벌크성 수정, 삭제 쿼리는 <code>@Modifying</code> 어노테이션을 사용
+<ul>
+<li>사용하지 않으면 다음 예외 발생</li>
+<li><code>org.hibernate.hql.internal.QueryExecutionRequestException: Not supported for DML operations</code></li>
+</ul>
+</li>
+<li>벌크성 쿼리를 실행하고 나서 영속성 컨텍스트 초기화 : <code>@Modifying(clearAutomatically = true)</code> <br>
+(이 옵션의 기본값은 <code>false</code>)
+<ul>
+<li>이 옵션 없이 회원을 <code>findById</code> 로 다시 조회하면 영속성 컨텍스트에 과거 값이 남아서 문제가 될 수 있다. 만약 다시 조회해야 하면 꼭 영속성 컨텍스트를 초기화 하자</li>
+</ul>
+</li>
+</ul>
+<br>
+<p><strong>참고</strong> <br> 벌크 연산은 영속성 컨텍스트를 무시하고 실행하기 때문에, 영속성 컨텍스트에 있는 엔티티의 상태와 DB에 엔티티 상태가 달라질 수 있다.</p>
+<br>
+<p>권장하는 방안
+<br></p>
+<ol>
+<li>영속성 컨텍스트에 엔티티가 없는 상태에서 벌크 연산을 먼저 실행한다.</li>
+<li>부득이하게 영속성 컨텍스트에 엔티티가 있으면 벌크 연산 직후 영속성 컨텍스트를 초기화 한다.</li>
+</ol>
+<br>
+<br>
+<br>
+<h2 id="10-entitygraph">10. @EntityGraph</h2>
+<p>연관된 엔티티들을 SQL 한번에 조회하는 방법</p>
+<p>참고: 다음과 같이 지연 로딩 여부를 확인할 수 있다.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">//Hibernate 기능으로 확인 
+</span><span class="c1"></span><span class="n">Hibernate</span><span class="o">.</span><span class="na">isInitialized</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">getTeam</span><span class="o">())</span>
+
+<span class="c1">//JPA 표준 방법으로 확인 
+</span><span class="c1"></span><span class="n">PersistenceUnitUtil</span> <span class="n">util</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">getEntityManagerFactory</span><span class="o">().</span><span class="na">getPersistenceUnitUtil</span><span class="o">();</span> 
+<span class="n">util</span><span class="o">.</span><span class="na">isLoaded</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">getTeam</span><span class="o">());</span>
+</code></pre></div><p>연관된 엔티티를 한번에 조회하려면 페치 조인이 필요하다.</p>
+<br>
+<p><strong>JPQL 페치 조인</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;select m from Member m left join fetch m.team&#34;</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberFetchJoin</span><span class="o">();</span>
+</code></pre></div><p>스프링 데이터 JPA는 JPA가 제공하는 엔티티 그래프 기능을 편리하게 사용하게 도와준다. <br> 이 기능을 사용하면 JPQL 없이 페치 조인을 사용할 수 있다. (JPQL + 엔티티 그래프도 가능)</p>
+<br>
+<br>
+<p><strong>EntityGraph</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">// 공통 메서드 오버라이드
+</span><span class="c1"></span><span class="nd">@Override</span>
+<span class="nd">@EntityGraph</span><span class="o">(</span><span class="n">attributePaths</span> <span class="o">=</span> <span class="o">{</span><span class="s">&#34;team&#34;</span><span class="o">})</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findAll</span><span class="o">();</span>
+
+<span class="c1">// JPQL + 엔티티 그래프
+</span><span class="c1"></span><span class="nd">@EntityGraph</span><span class="o">(</span><span class="n">attributePaths</span> <span class="o">=</span> <span class="o">{</span><span class="s">&#34;team&#34;</span><span class="o">})</span>
+<span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;select m from Member m&#34;</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberEntityGraph</span><span class="o">();</span>
+
+<span class="c1">// 메서드 이름으로 쿼리에서 특히 편리하다.
+</span><span class="c1"></span><span class="nd">@EntityGraph</span><span class="o">(</span><span class="n">attributePaths</span> <span class="o">=</span> <span class="o">{</span><span class="s">&#34;team&#34;</span><span class="o">})</span>
+<span class="c1">//    @EntityGraph(&#34;Member.all&#34;)
+</span><span class="c1"></span><span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findEntityGraphByUsername</span><span class="o">(</span><span class="nd">@Param</span><span class="o">(</span><span class="s">&#34;username&#34;</span><span class="o">)</span> <span class="n">String</span> <span class="n">username</span><span class="o">);</span>
+</code></pre></div><br>
+<br>
+<p><strong>EntityGraph 정리</strong></p>
+<ul>
+<li>사실상 페치 조인(FETCH JOIN)의 간편 버전</li>
+<li>LEFT OUTER JOIN 사용</li>
+</ul>
+<br>
+<br>
+<p><strong>NamedEntityGraph 사용 방법</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@NamedEntityGraph</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;Member.all&#34;</span><span class="o">,</span> <span class="n">attributeNodes</span> <span class="o">=</span> 
+<span class="nd">@NamedAttributeNode</span><span class="o">(</span><span class="s">&#34;team&#34;</span><span class="o">))</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Member</span> <span class="o">{</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@EntityGraph</span><span class="o">(</span><span class="s">&#34;Member.all&#34;</span><span class="o">)</span> 
+<span class="nd">@Query</span><span class="o">(</span><span class="s">&#34;select m from Member m&#34;</span><span class="o">)</span> 
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberEntityGraph</span><span class="o">();</span>
+</code></pre></div><br>
+<br>
+<br>
+<h2 id="11-jpa-hint--lock">11. JPA Hint &amp; Lock</h2>
+<h3 id="jpa-hint">JPA Hint</h3>
+<p>JPA 쿼리 힌트(SQL 힌트가 아니라 JPA 구현체에게 제공하는 힌트)</p>
+<br>
+<br>
+<p><strong>쿼리 힌트 사용</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@QueryHints</span><span class="o">(</span><span class="n">value</span> <span class="o">=</span> <span class="nd">@QueryHint</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;org.hibernate.readOnly&#34;</span><span class="o">,</span> <span class="n">value</span> <span class="o">=</span>
+<span class="s">&#34;true&#34;</span><span class="o">))</span>
+<span class="n">Member</span> <span class="nf">findReadOnlyByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">);</span>
+</code></pre></div><br>
+<br>
+<p><strong>쿼리 힌트 사용 확인</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">queryHint</span><span class="o">()</span> <span class="o">{</span>
+    <span class="c1">// given
+</span><span class="c1"></span>    <span class="n">Member</span> <span class="n">member1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">);</span>
+    <span class="n">memberRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">member1</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">flush</span><span class="o">();</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">clear</span><span class="o">();</span>
+
+    <span class="c1">// when
+</span><span class="c1"></span>    <span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findReadOnlyByUsername</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">);</span>
+    <span class="n">findMember</span><span class="o">.</span><span class="na">setUsername</span><span class="o">(</span><span class="s">&#34;member2&#34;</span><span class="o">);</span> <span class="c1">// Update Query 실행X
+</span><span class="c1"></span>
+    <span class="n">em</span><span class="o">.</span><span class="na">flush</span><span class="o">();</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>쿼리 힌트 Page 추가 예제</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@QueryHints</span><span class="o">(</span><span class="n">value</span> <span class="o">=</span> <span class="o">{</span> <span class="nd">@QueryHint</span><span class="o">(</span><span class="n">name</span> <span class="o">=</span> <span class="s">&#34;org.hibernate.readOnly&#34;</span><span class="o">,</span>
+																 <span class="n">value</span> <span class="o">=</span> <span class="s">&#34;true&#34;</span><span class="o">)},</span>
+						<span class="n">forCounting</span> <span class="o">=</span> <span class="kc">true</span><span class="o">)</span>
+<span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">name</span><span class="o">,</span> <span class="n">Pagable</span> <span class="n">pageable</span><span class="o">);</span>
+</code></pre></div><ul>
+<li><code>org.springframework.data.jpa.repository.QueryHints</code> 어노테이션을 사용</li>
+<li><code>forCounting</code> : 반환 타입으로 <code>Page</code> 인터페이스를 적용하면 추가로 호출하는 페이징을 위한 count 쿼리도 쿼리 힌트 적용(기본값 <code>true</code>)</li>
+</ul>
+<br>
+<br>
+<br>
+<h3 id="lock">Lock</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Lock</span><span class="o">(</span><span class="n">LockModeType</span><span class="o">.</span><span class="na">PESSIMISTIC_WRITE</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findLockByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">);</span>
+</code></pre></div><ul>
+<li><code>org.springframework.data.jpa.repository.Lock</code> 어노테이션을 사용</li>
+</ul>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-31</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/" data-title="쿼리 메소드" data-hashtags="Spring Data JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/" data-hashtag="Spring Data JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/" data-title="쿼리 메소드" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/spring-data-jpa/">Spring Data JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/spring-data-jpa-common-interface/" class="prev" rel="prev" title="공통 인터페이스 기능"><i class="fas fa-angle-left fa-fw"></i>공통 인터페이스 기능</a>
+            <a href="/posts/spring-data-jpa-extension/" class="next" rel="next" title="확장 기능">확장 기능<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

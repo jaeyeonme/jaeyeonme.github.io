@@ -1,0 +1,94 @@
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title>Spring Data JPA - Tag - 📚 | Dev Blog</title>
+        <link>https://jaeyeonme.github.io/tags/spring-data-jpa/</link>
+        <description>Spring Data JPA - Tag - 📚 | Dev Blog</description>
+        <generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Fri, 31 Dec 2021 10:30:00 &#43;0000</lastBuildDate><atom:link href="https://jaeyeonme.github.io/tags/spring-data-jpa/" rel="self" type="application/rss+xml" /><item>
+    <title>확장 기능</title>
+    <link>https://jaeyeonme.github.io/posts/spring-data-jpa-extension/</link>
+    <pubDate>Fri, 31 Dec 2021 10:30:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/posts/spring-data-jpa-extension/</guid>
+    <description><![CDATA[<div class="featured-image">
+                <img src="/images/JPA/spring-data-jpa.png" referrerpolicy="no-referrer">
+            </div>1. 사용자 정의 리포지토리 구현 사용자 정의 리포지토리 구현  스프링 데이터 JPA 리포지토리는 인터페이스만 정의하고 구현체는 스프링이 자동 생성 스프링 데이터 JPA가 제공하는 인터페이를 직접 구현하면 구현해야 하는 기능이 너무 많음 다양한 이유로 인터페이스의 메서드를 직접 구현하고 싶다면?  JPA 직접 사용(EntityManager) 스프링 JDBC Template 사용 MyBatis 사용 데이터베이스 커넥션 직접 사용 등등.. QueryDSL 사용    사용자 정의 인터페이스
+public interface MemberRepositoryCustom { List&lt;Member&gt; findMemberCustom(); } 
+사용자 정의 인터페이스 구현 클래스
+@RequiredArgsConstructor public class MemberRepositoryImpl implements MemberRepositoryCustom { private final EntityManager em; @Override public List&lt;Member&gt; findMemberCustom() { return em.createQuery(&#34;select m from Member m&#34;) .getResultList(); } } 
+사용자 정의 인터페이스 상속
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt;, MemberRepositoryCustom { } 
+사용자 정의 메서드 호출 코드
+List&lt;Member&gt; result = memberRepository.findMemberCustom(); 
+사용자 정의 구현 클래스
+ 규칙 : 리포지토리 인터페이스 이름 + Impl 스프링 데이터 JPA가 인식해서 스프링 빈으로 등록  Impl 대시 다른 이름으로 변경하고 싶으면?
+XML 설정
+&lt;repositories base-package=&#34;study.datajpa.repository&#34; repository-impl-postfix=&#34;Impl&#34; /&gt; 
+JavaConfig 설정
+@EnableJpaRepositories(basePackages = &#34;study.datajpa.repository&#34;, repositoryImplementationPostfix = &#34;Impl&#34;) 
+참고 실무에서는 주로 QueryDSL이나 SpringJdbcTemplate을 함께 사용할 때 사용자 정의 리포지토리 기능 자주 사용 항상 사용자 정의 리포지토리가 필요한 것은 아니다. 그냥 임의의 리포지토리를 만들어도 된다.
+예를들어 MemberQueryRepository를 인터페이스가 아닌 클래스로 만들고 스프링 빈으로 등록해서 그냥 직접 사용해도 된다. 물론 이 경우 스프링 데이터 JPA와는 아무런 관계 없이 별도로 동작한다.
+사용자 정의 리포지토리 구현 최신 방식 스프링 데이터 2.x 부터는 사용자 정의 구현 클래스에 리포지토리 인터페이스 이름 + Impl 을 적용하는 대신에 사용자 정의 인터페이스 명 + Impl 방식도 지원한다.
+예를 들어 위 예제의 MemberRepositoryImpl 대신에 MemberRepositoryCustomImpl 같이 구현해도 된다.
+최신 사용자 정의 인터페이스 구현 클래스 예제
+@RequiredArgsConstructor public class MemberRepositoryCustomImpl implements MemberRepositoryCustom { private final EntityManager em; @Override public List&lt;Member&gt; findMemberCustom() { return em.createQuery(&#34;select m from Member m&#34;) .getResultList(); } } 기존 방식보다 이 방식이 사용자 정의 인터페이스 이름과 구현 클래스 이름이 비슷하므로 더 직관적이다. 추가로 여러 인터페이스를 분리해서 구현하는 것도 가능하기 때문에 새롭게 변경된 이 방식을 사용하는 것을 더 권장한다.
+2. Auditing  엔티티를 생성, 변경할 때 변경한 사람과 시간을 추적하고 싶으면?  등록일 수정일 등록자 수정자    순수 JPA 사용 우선 등록일, 수정일 적용
+@Getter @MappedSuperclass public class JpaBaseEntity { @Column(updatable = false) private LocalDateTime createdDate; private LocalDateTime updatedDate; @PrePersist public void prePersist() { LocalDateTime now = LocalDateTime.now(); createdDate = now; updatedDate = now; } @PreUpdate public void preUpdate() { updatedDate = LocalDateTime.now(); } } JPA 주요 이벤트 어노테이션
+ @PrePersist, @PostPersist @PreUpdate, @PostUpdate  스프링 데이터 JPA 사용 설정
+@EnableJpaAuditing → 스프링 부트 설정 클래스에 적용해야함
+@EntityListeners(AuditingEntityListener.class) → 엔티티에 적용
+사용 어노테이션
+ @CreatedDate @LastModifiedDate @CreatedBy @LastModifiedBy  스프링 데이터 Auditing 적용 - 등록일, 수정일
+@EntityListeners(AuditingEntityListener.class) @MappedSuperclass @Getter public class BaseEntity { @CreatedBy @Column(updatable = false) private String createdBy; @LastModifiedBy private String lastModifiedBy; } 
+스프링 데이터 Auditing 적용 - 등록자, 수정자
+@EntityListeners(AuditingEntityListener.class) @MappedSuperclass @Getter public class BaseTimeEntity { @CreatedDate @Column(updatable = false) private LocalDateTime createdDate; @LastModifiedDate private LocalDateTime lastModifiedDate; } 
+등록자, 수정자를 처리해주는 AuditorAware 스프링 빈 등록
+@Bean public AuditorAware&lt;String&gt; auditorProvider() { return () -&gt; Optional.of(UUID.randomUUID().toString()); } 실무에서는 세션 정보나, 스프링 시큐리티 로그인 정보에서 ID를 받음]]></description>
+</item><item>
+    <title>쿼리 메소드</title>
+    <link>https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/</link>
+    <pubDate>Fri, 31 Dec 2021 09:30:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/</guid>
+    <description><![CDATA[<div class="featured-image">
+                <img src="/images/JPA/spring-data-jpa.png" referrerpolicy="no-referrer">
+            </div>1. 쿼리 메소드 기능  메소드 이름으로 쿼리 생성 NamedQuery @Query - 리파지토리 메소드에 쿼리 정의 파라미터 바인딩 반환 타입 페이징과 정렬 벌크성 수정 쿼리 @EntityGraph  쿼리 메소드 기능 3가지
+ 메소드 이름으로 쿼리 생성 메소드 이름으로 JPA namedQuery 호출 @Query 어노테이션을 사용해서 리포지토리 인터페이스에 쿼리 직접 정의  메소드 이름으로 쿼리 생성 메소드 이름을 분석해서 JPQL 쿼리 실행
+이름과 나이를 기준으로 회원을 조회하려면?
+순수 JPA 리포지토리
+public List&lt;Member&gt; findByUsernameAndAgeGreaterThen(String username, int age) { return em.createQuery(&#34;select m from Member m where m.username = :username and m.age &gt; :age&#34;) .setParameter(&#34;username&#34;, username) .setParameter(&#34;age&#34;, age) .getResultList(); } 
+순수 JPA 테스트 코드
+@Test public void findByUsernameAndAgeGreaterThen() { Member m1 = new Member(&#34;AAA&#34;, 10); Member m2 = new Member(&#34;AAA&#34;, 20); memberJpaRepository.save(m1); memberJpaRepository.save(m2); List&lt;Member&gt; result = memberJpaRepository.findByUsernameAndAgeGreaterThen(&#34;AAA&#34;, 15); assertThat(result.get(0).getUsername()).isEqualTo(&#34;AAA&#34;); assertThat(result.get(0).getAge()).isEqualTo(20); assertThat(result.size()).isEqualTo(1); } 
+스프링 데이터 JPA
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { List&lt;Member&gt; findByUsernameAndAgeGreaterThan(String username, int age); }  스프링 데이터 JPA는 메소드 이름을 분석해서 JPQL을 생성하고 실행  스프링 데이터 JPA가 제공하는 쿼리 메소드 기능
+ 조회: find…By ,read…By ,query…By get…By,  https://docs.spring.io/spring-data/jpa/docs/current/reference/html/ #repositories.query-methods.query-creation 예:) findHelloBy 처럼 &hellip;에 식별하기 위한 내용(설명)이 들어가도 된다.   COUNT: count…By 반환타입 long EXISTS: exists…By 반환타입 boolean 삭제: delete…By, remove…By 반환타입 long DISTINCT: findDistinct, findMemberDistinctBy LIMIT: findFirst3, findFirst, findTop, findTop3  https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.limit-query-result    참고 이 기능은 엔티티의 필드명이 변경되면 인터페이스에 정의한 메서드 이름도 꼭 함께 변경해야 한다. 그렇지 않으면 애플리케이션을 시작하는 시점에 오류가 발생한다. 이렇게 애플리케이션 로딩 시점에 오류를 인지할 수 있는 것이 스프링 데이터 JPA의 매우 큰 장점이다.
+2. JPA NamedQuery JPA의 NamedQuery를 호출할 수 있음
+@NamedQuery 어노테이션으로 Named 쿼리 정의
+@Entity @NamedQuery( name = &#34;Member.findByUsername&#34;, query = &#34;select m from Member m where m.username = :username&#34; ) public class Member { ... } 
+JPA를 직접 사용해서 Named 쿼리 호출
+public class MemberRepository { public List&lt;Member&gt; findByUsername(String username) { ... return em.createNamedQuery(&#34;Member.findByUsername&#34;, Member.class) .setParameter(&#34;username&#34;, username) .getResultList(); } } 
+스프링 데이터 JPA로 NamedQuery 사용
+@Query(name = &#34;Member.findByUsername&#34;) List&lt;Member&gt; findByUsername(@Param(&#34;username&#34;) String username); @Query 를 생략하고 메서드 이름만으로 Named 쿼리를 호출할 수 있다.
+스프링 데이터 JPA로 Named 쿼리 호출
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { // ** 여기 선언한 Member 도메인 클래스  List&lt;Member&gt; findByUsername(@Param(&#34;username&#34;) String username); }  스프링 데이터 JPA는 선언한 &ldquo;도메인 클래스 + .(점) + 메서드 이름&rdquo; 으로 Named 쿼리를 찾아서 실행 만약 실행할 Named 쿼리가 없으면 메서드 이름으로 쿼리 생성 전략을 사용한다. 필요하면 전략을 변경할 수 있지만 권장하지 않는다.  참고 : https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-lookup-strategies    참고 스프링 데이터 JPA를 사용하면 실무에서 Named Query를 직접 등록해서 사용하는 일은 드물다. 대신 @Query 를 사용해서 리포지토리 메소드에 쿼리를 직접 정의한다.
+3. @Query, 리포지토리 메소드에 쿼리 정의하기 메서드 JPQL 쿼리 작성 public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { @Query(&#34;select m from Member m where m.username = :username and m.age = :age&#34;) List&lt;Member&gt; findUser(@Param(&#34;username&#34;) String username, @Param(&#34;age&#34;) int age); }  @org.springframework.data.jpa.repository.Query 어노테이션을 사용 실행할 메서드에 정적 쿼리를 직접 작성하므로 이름 없는 Named 쿼리라 할 수 있음 JPA Named 쿼리처럼 애플리케이션 실행 시점에 문법 오류를 발견할 수 있음 (매우 큰 장점!)  참고 실무에서는 메소드 이름으로 쿼리 생성 기능은 파라미터가 증가하면 메서드 이름이 매우 지저분해진다.]]></description>
+</item><item>
+    <title>공통 인터페이스 기능</title>
+    <link>https://jaeyeonme.github.io/posts/spring-data-jpa-common-interface/</link>
+    <pubDate>Fri, 31 Dec 2021 09:00:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/posts/spring-data-jpa-common-interface/</guid>
+    <description><![CDATA[<div class="featured-image">
+                <img src="/images/JPA/spring-data-jpa.png" referrerpolicy="no-referrer">
+            </div>1. 순수 JPA기반 리포지토리 만들기  기본 CRUD  저장 변경 → 변경감지 사용 삭제 전체 조회 단건 조회 카운트     참고: JPA에서 수정은 변경감지 기능을 사용하면 된다. 트랜잭션 안에서 엔티티를 조회한 다음에 데이터를 변경하면, 트랜잭션 종료 시점에 변경감지 기능이 작동해서 변경된 엔티티를 감지하고 UPDATE SQL을 실행한다.
+ 순수 JPA 기반 리포지토리
+@Repository public class MemberJpaRepository { @PersistenceContext private EntityManager em; // Create (저장)  public Member save(Member member) { em.persist(member); return member; } // Delete (삭제)  public void delete(Member member) { em.remove(member); } // Read (조회)  public List&lt;Member&gt; findAll() { // JPQL  return em.createQuery(&#34;select m from Member m&#34;, Member.class) .getResultList(); } public Optional&lt;Member&gt; findById(Long id) { Member member = em.find(Member.class, id); return Optional.ofNullable(member); } public long count() { return em.createQuery(&#34;select count(m) from Member m&#34;, Long.class) .getSingleResult(); } public Member find(Long id) { return em.find(Member.class, id); } }  회원 리포지토리와 거의 동일하다.  2. 공통 인터페이스 설정 javaConfig 설정 - 스프링 부트 사용시 생략 가능 @Configuration @EnableJpaRepositories(basePackages = &#34;jpabook.jpashop.repository&#34;) public class AppConfig {}  스프링 부트 사용시 @SpringBootApplication 위치를 지정(해당 패키지와 하위 패키지 인식) 만약 위치가 달라지면 @EnableJpaRepositories 필요  스프링 데이터 JPA가 구현 클래스 대신 생성  org.springframework.data.repository.Repository 를 구현한 클래스는 스캔 대상  MemberRepository 인터페이스가 동작한 이유 실제 출력해보기(Proxy) memberRepository.getClass() → class com.sun.proxy.$ProxyXXX   @Repository 애노테이션 생략 가능  컴포넌트 스캔 스프링 데이터 JPA가 자동으로 처리 JPA 예외를 스프링 예외로 변환하는 과정도 자동으로 처리    3. 공통 인터페이스 적용 순수 JPA로 구현한 MemberJpaRepository 대신에 스프링 데이터 JPA가 제공하는 공통 인터페이스 사용
+스프링 데이터 JPA 기반 Repository public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { }  Generic  T : 엔티티 타입 ID : 식별자 타입(PK)    4. 공통 인터페이스 분석  JpaRepository 인터페이스 : 공통 CURD 제공 제네릭은 &lt;엔티티 타입, 식별자 타입&gt; 설정  JpaRepository 공통 기능 인터페이스
+public interface JpaRepository&lt;T, ID extends Serializable&gt; extends PagingAndSortingRepository&lt;T, ID&gt; { ... } 
+JpaRepository 를 사용하는 인터페이스
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { } 
+공통 인터페이스 구성 주의
+ T findOne(ID) → Optional&lt;T&gt; findById(ID) 변경  제네릭 타입
+ T : 엔티티 ID : 엔티티의 식별자 타입 S : 엔티티와 그 자식 타입  주요 메서드
+ save(S) : 새로운 엔티티는 저장하고 이미 있는 엔티티는 병합한다. delete(T) : 엔티티 하나르 삭제한다. 내부에서 EntityManager.remove() 호출 findById(ID) : 엔티티 하나를 조회한다. 내부에서 EntityManager.find() 호출 getOne(ID) : 엔티티를 프록시로 조회한다. 내부에서 EntityManager.getReference() 호출 findAll(...) : 모든 엔티티를 조회한다. 정렬(Sort)이나 페이징(Pageable) 조건을 파라미터로 제공할 수 있다.  참고: JpaRepository 는 대부분의 공통 메서드를 제공한다.]]></description>
+</item></channel>
+</rss>

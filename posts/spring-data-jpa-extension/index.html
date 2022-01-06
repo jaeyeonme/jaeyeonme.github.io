@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>확장 기능 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="확장 기능" />
+<meta property="og:description" content="1. 사용자 정의 리포지토리 구현 사용자 정의 리포지토리 구현  스프링 데이터 JPA 리포지토리는 인터페이스만 정의하고 구현체는 스프링이 자동 생성 스프링 데이터 JPA가 제공하는 인터페이를 직접 구현하면 구현해야 하는 기능이 너무 많음 다양한 이유로 인터페이스의 메서드를 직접 구현하고 싶다면?  JPA 직접 사용(EntityManager) 스프링 JDBC Template 사용 MyBatis 사용 데이터베이스 커넥션 직접 사용 등등.. QueryDSL 사용    사용자 정의 인터페이스
+public interface MemberRepositoryCustom { List&lt;Member&gt; findMemberCustom(); } 
+사용자 정의 인터페이스 구현 클래스
+@RequiredArgsConstructor public class MemberRepositoryImpl implements MemberRepositoryCustom { private final EntityManager em; @Override public List&lt;Member&gt; findMemberCustom() { return em.createQuery(&#34;select m from Member m&#34;) .getResultList(); } } 
+사용자 정의 인터페이스 상속
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt;, MemberRepositoryCustom { } 
+사용자 정의 메서드 호출 코드
+List&lt;Member&gt; result = memberRepository.findMemberCustom(); 
+사용자 정의 구현 클래스
+ 규칙 : 리포지토리 인터페이스 이름 &#43; Impl 스프링 데이터 JPA가 인식해서 스프링 빈으로 등록  Impl 대시 다른 이름으로 변경하고 싶으면?
+XML 설정
+&lt;repositories base-package=&#34;study.datajpa.repository&#34; repository-impl-postfix=&#34;Impl&#34; /&gt; 
+JavaConfig 설정
+@EnableJpaRepositories(basePackages = &#34;study.datajpa.repository&#34;, repositoryImplementationPostfix = &#34;Impl&#34;) 
+참고 실무에서는 주로 QueryDSL이나 SpringJdbcTemplate을 함께 사용할 때 사용자 정의 리포지토리 기능 자주 사용 항상 사용자 정의 리포지토리가 필요한 것은 아니다. 그냥 임의의 리포지토리를 만들어도 된다.
+예를들어 MemberQueryRepository를 인터페이스가 아닌 클래스로 만들고 스프링 빈으로 등록해서 그냥 직접 사용해도 된다. 물론 이 경우 스프링 데이터 JPA와는 아무런 관계 없이 별도로 동작한다.
+사용자 정의 리포지토리 구현 최신 방식 스프링 데이터 2.x 부터는 사용자 정의 구현 클래스에 리포지토리 인터페이스 이름 &#43; Impl 을 적용하는 대신에 사용자 정의 인터페이스 명 &#43; Impl 방식도 지원한다.
+예를 들어 위 예제의 MemberRepositoryImpl 대신에 MemberRepositoryCustomImpl 같이 구현해도 된다.
+최신 사용자 정의 인터페이스 구현 클래스 예제
+@RequiredArgsConstructor public class MemberRepositoryCustomImpl implements MemberRepositoryCustom { private final EntityManager em; @Override public List&lt;Member&gt; findMemberCustom() { return em.createQuery(&#34;select m from Member m&#34;) .getResultList(); } } 기존 방식보다 이 방식이 사용자 정의 인터페이스 이름과 구현 클래스 이름이 비슷하므로 더 직관적이다. 추가로 여러 인터페이스를 분리해서 구현하는 것도 가능하기 때문에 새롭게 변경된 이 방식을 사용하는 것을 더 권장한다.
+2. Auditing  엔티티를 생성, 변경할 때 변경한 사람과 시간을 추적하고 싶으면?  등록일 수정일 등록자 수정자    순수 JPA 사용 우선 등록일, 수정일 적용
+@Getter @MappedSuperclass public class JpaBaseEntity { @Column(updatable = false) private LocalDateTime createdDate; private LocalDateTime updatedDate; @PrePersist public void prePersist() { LocalDateTime now = LocalDateTime.now(); createdDate = now; updatedDate = now; } @PreUpdate public void preUpdate() { updatedDate = LocalDateTime.now(); } } JPA 주요 이벤트 어노테이션
+ @PrePersist, @PostPersist @PreUpdate, @PostUpdate  스프링 데이터 JPA 사용 설정
+@EnableJpaAuditing → 스프링 부트 설정 클래스에 적용해야함
+@EntityListeners(AuditingEntityListener.class) → 엔티티에 적용
+사용 어노테이션
+ @CreatedDate @LastModifiedDate @CreatedBy @LastModifiedBy  스프링 데이터 Auditing 적용 - 등록일, 수정일
+@EntityListeners(AuditingEntityListener.class) @MappedSuperclass @Getter public class BaseEntity { @CreatedBy @Column(updatable = false) private String createdBy; @LastModifiedBy private String lastModifiedBy; } 
+스프링 데이터 Auditing 적용 - 등록자, 수정자
+@EntityListeners(AuditingEntityListener.class) @MappedSuperclass @Getter public class BaseTimeEntity { @CreatedDate @Column(updatable = false) private LocalDateTime createdDate; @LastModifiedDate private LocalDateTime lastModifiedDate; } 
+등록자, 수정자를 처리해주는 AuditorAware 스프링 빈 등록
+@Bean public AuditorAware&lt;String&gt; auditorProvider() { return () -&gt; Optional.of(UUID.randomUUID().toString()); } 실무에서는 세션 정보나, 스프링 시큐리티 로그인 정보에서 ID를 받음" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/spring-data-jpa-extension/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-31T10:30:00+00:00" />
+<meta property="article:modified_time" content="2021-12-31T10:30:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="확장 기능"/>
+<meta name="twitter:description" content="1. 사용자 정의 리포지토리 구현 사용자 정의 리포지토리 구현  스프링 데이터 JPA 리포지토리는 인터페이스만 정의하고 구현체는 스프링이 자동 생성 스프링 데이터 JPA가 제공하는 인터페이를 직접 구현하면 구현해야 하는 기능이 너무 많음 다양한 이유로 인터페이스의 메서드를 직접 구현하고 싶다면?  JPA 직접 사용(EntityManager) 스프링 JDBC Template 사용 MyBatis 사용 데이터베이스 커넥션 직접 사용 등등.. QueryDSL 사용    사용자 정의 인터페이스
+public interface MemberRepositoryCustom { List&lt;Member&gt; findMemberCustom(); } 
+사용자 정의 인터페이스 구현 클래스
+@RequiredArgsConstructor public class MemberRepositoryImpl implements MemberRepositoryCustom { private final EntityManager em; @Override public List&lt;Member&gt; findMemberCustom() { return em.createQuery(&#34;select m from Member m&#34;) .getResultList(); } } 
+사용자 정의 인터페이스 상속
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt;, MemberRepositoryCustom { } 
+사용자 정의 메서드 호출 코드
+List&lt;Member&gt; result = memberRepository.findMemberCustom(); 
+사용자 정의 구현 클래스
+ 규칙 : 리포지토리 인터페이스 이름 &#43; Impl 스프링 데이터 JPA가 인식해서 스프링 빈으로 등록  Impl 대시 다른 이름으로 변경하고 싶으면?
+XML 설정
+&lt;repositories base-package=&#34;study.datajpa.repository&#34; repository-impl-postfix=&#34;Impl&#34; /&gt; 
+JavaConfig 설정
+@EnableJpaRepositories(basePackages = &#34;study.datajpa.repository&#34;, repositoryImplementationPostfix = &#34;Impl&#34;) 
+참고 실무에서는 주로 QueryDSL이나 SpringJdbcTemplate을 함께 사용할 때 사용자 정의 리포지토리 기능 자주 사용 항상 사용자 정의 리포지토리가 필요한 것은 아니다. 그냥 임의의 리포지토리를 만들어도 된다.
+예를들어 MemberQueryRepository를 인터페이스가 아닌 클래스로 만들고 스프링 빈으로 등록해서 그냥 직접 사용해도 된다. 물론 이 경우 스프링 데이터 JPA와는 아무런 관계 없이 별도로 동작한다.
+사용자 정의 리포지토리 구현 최신 방식 스프링 데이터 2.x 부터는 사용자 정의 구현 클래스에 리포지토리 인터페이스 이름 &#43; Impl 을 적용하는 대신에 사용자 정의 인터페이스 명 &#43; Impl 방식도 지원한다.
+예를 들어 위 예제의 MemberRepositoryImpl 대신에 MemberRepositoryCustomImpl 같이 구현해도 된다.
+최신 사용자 정의 인터페이스 구현 클래스 예제
+@RequiredArgsConstructor public class MemberRepositoryCustomImpl implements MemberRepositoryCustom { private final EntityManager em; @Override public List&lt;Member&gt; findMemberCustom() { return em.createQuery(&#34;select m from Member m&#34;) .getResultList(); } } 기존 방식보다 이 방식이 사용자 정의 인터페이스 이름과 구현 클래스 이름이 비슷하므로 더 직관적이다. 추가로 여러 인터페이스를 분리해서 구현하는 것도 가능하기 때문에 새롭게 변경된 이 방식을 사용하는 것을 더 권장한다.
+2. Auditing  엔티티를 생성, 변경할 때 변경한 사람과 시간을 추적하고 싶으면?  등록일 수정일 등록자 수정자    순수 JPA 사용 우선 등록일, 수정일 적용
+@Getter @MappedSuperclass public class JpaBaseEntity { @Column(updatable = false) private LocalDateTime createdDate; private LocalDateTime updatedDate; @PrePersist public void prePersist() { LocalDateTime now = LocalDateTime.now(); createdDate = now; updatedDate = now; } @PreUpdate public void preUpdate() { updatedDate = LocalDateTime.now(); } } JPA 주요 이벤트 어노테이션
+ @PrePersist, @PostPersist @PreUpdate, @PostUpdate  스프링 데이터 JPA 사용 설정
+@EnableJpaAuditing → 스프링 부트 설정 클래스에 적용해야함
+@EntityListeners(AuditingEntityListener.class) → 엔티티에 적용
+사용 어노테이션
+ @CreatedDate @LastModifiedDate @CreatedBy @LastModifiedBy  스프링 데이터 Auditing 적용 - 등록일, 수정일
+@EntityListeners(AuditingEntityListener.class) @MappedSuperclass @Getter public class BaseEntity { @CreatedBy @Column(updatable = false) private String createdBy; @LastModifiedBy private String lastModifiedBy; } 
+스프링 데이터 Auditing 적용 - 등록자, 수정자
+@EntityListeners(AuditingEntityListener.class) @MappedSuperclass @Getter public class BaseTimeEntity { @CreatedDate @Column(updatable = false) private LocalDateTime createdDate; @LastModifiedDate private LocalDateTime lastModifiedDate; } 
+등록자, 수정자를 처리해주는 AuditorAware 스프링 빈 등록
+@Bean public AuditorAware&lt;String&gt; auditorProvider() { return () -&gt; Optional.of(UUID.randomUUID().toString()); } 실무에서는 세션 정보나, 스프링 시큐리티 로그인 정보에서 ID를 받음"/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/spring-data-jpa-extension/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/" /><link rel="next" href="https://jaeyeonme.github.io/posts/querydsl-basic-grammer/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "확장 기능",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/spring-data-jpa-extension\/"
+        },"genre": "posts","keywords": "Spring Data JPA, Hibernate","wordcount":  1050 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/spring-data-jpa-extension\/","datePublished": "2021-12-31T10:30:00+00:00","dateModified": "2021-12-31T10:30:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">확장 기능</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/spring-data-jpa/"><i class="far fa-folder fa-fw"></i>Spring Data JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-31">2021-12-31</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;1050 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;5 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/spring-data-jpa.png"
+        data-srcset="/images/JPA/spring-data-jpa.png, /images/JPA/spring-data-jpa.png 1.5x, /images/JPA/spring-data-jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/spring-data-jpa.png"
+        title="/images/JPA/spring-data-jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-사용자-정의-리포지토리-구현">1. 사용자 정의 리포지토리 구현</a>
+      <ul>
+        <li><a href="#사용자-정의-리포지토리-구현">사용자 정의 리포지토리 구현</a></li>
+        <li><a href="#사용자-정의-리포지토리-구현-최신-방식">사용자 정의 리포지토리 구현 최신 방식</a></li>
+      </ul>
+    </li>
+    <li><a href="#2-auditing">2. Auditing</a>
+      <ul>
+        <li><a href="#순수-jpa-사용">순수 JPA 사용</a></li>
+        <li><a href="#스프링-데이터-jpa-사용">스프링 데이터 JPA 사용</a></li>
+      </ul>
+    </li>
+    <li><a href="#3-web-확장---도메인-클래스-컨버터">3. Web 확장 - 도메인 클래스 컨버터</a></li>
+    <li><a href="#4-web-확장---페이징과-정렬">4. Web 확장 - 페이징과 정렬</a>
+      <ul>
+        <li><a href="#page-내용을-dto로-변환하기">Page 내용을 DTO로 변환하기</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-사용자-정의-리포지토리-구현">1. 사용자 정의 리포지토리 구현</h2>
+<h3 id="사용자-정의-리포지토리-구현">사용자 정의 리포지토리 구현</h3>
+<ul>
+<li>스프링 데이터 JPA 리포지토리는 인터페이스만 정의하고 구현체는 스프링이 자동 생성</li>
+<li>스프링 데이터 JPA가 제공하는 인터페이를 직접 구현하면 구현해야 하는 기능이 너무 많음</li>
+<li>다양한 이유로 인터페이스의 메서드를 직접 구현하고 싶다면?
+<ul>
+<li>JPA 직접 사용(<code>EntityManager</code>)</li>
+<li>스프링 JDBC Template 사용</li>
+<li>MyBatis 사용</li>
+<li>데이터베이스 커넥션 직접 사용 등등..</li>
+<li>QueryDSL 사용</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<p><strong>사용자 정의 인터페이스</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepositoryCustom</span> <span class="o">{</span> 
+	<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberCustom</span><span class="o">();</span> 
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>사용자 정의 인터페이스 구현 클래스</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@RequiredArgsConstructor</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberRepositoryImpl</span> <span class="kd">implements</span> <span class="n">MemberRepositoryCustom</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="n">EntityManager</span> <span class="n">em</span><span class="o">;</span>
+
+    <span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberCustom</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select m from Member m&#34;</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>사용자 정의 인터페이스 상속</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepository</span> 
+        <span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;,</span> <span class="n">MemberRepositoryCustom</span> <span class="o">{</span>
+
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>사용자 정의 메서드 호출 코드</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findMemberCustom</span><span class="o">();</span>
+</code></pre></div><br>
+<br>
+<p><strong>사용자 정의 구현 클래스</strong></p>
+<ul>
+<li>규칙 : 리포지토리 인터페이스 이름 + <code>Impl</code></li>
+<li>스프링 데이터 JPA가 인식해서 스프링 빈으로 등록</li>
+</ul>
+<p><strong>Impl 대시 다른 이름으로 변경하고 싶으면?</strong></p>
+<br>
+<br>
+<p><strong>XML 설정</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-xml" data-lang="xml"><span class="nt">&lt;repositories</span> <span class="na">base-package=</span><span class="s">&#34;study.datajpa.repository&#34;</span>
+            <span class="na">repository-impl-postfix=</span><span class="s">&#34;Impl&#34;</span> <span class="nt">/&gt;</span>
+</code></pre></div><br>
+<br>
+<p><strong>JavaConfig 설정</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@EnableJpaRepositories</span><span class="o">(</span><span class="n">basePackages</span> <span class="o">=</span> <span class="s">&#34;study.datajpa.repository&#34;</span><span class="o">,</span> <span class="n">repositoryImplementationPostfix</span> <span class="o">=</span> <span class="s">&#34;Impl&#34;</span><span class="o">)</span>
+</code></pre></div><br>
+<br>
+<p><strong>참고</strong> <br> 실무에서는 주로 QueryDSL이나 SpringJdbcTemplate을 함께 사용할 때 사용자 정의 리포지토리 기능 자주 사용 <br></p>
+<p>항상 사용자 정의 리포지토리가 필요한 것은 아니다. 그냥 임의의 리포지토리를 만들어도 된다.<br> 예를들어 MemberQueryRepository를 인터페이스가 아닌 클래스로 만들고 스프링 빈으로 등록해서 그냥 직접 사용해도 된다. <br> 물론 이 경우 스프링 데이터 JPA와는 아무런 관계 없이 별도로 동작한다.</p>
+<br>
+<br>
+<h3 id="사용자-정의-리포지토리-구현-최신-방식">사용자 정의 리포지토리 구현 최신 방식</h3>
+<p>스프링 데이터 2.x 부터는 사용자 정의 구현 클래스에 리포지토리 인터페이스 이름 + <code>Impl</code> 을 적용하는 대신에 <br> 사용자 정의 인터페이스 명 + <code>Impl</code> 방식도 지원한다.</p>
+<p>예를 들어 위 예제의 <code>MemberRepositoryImpl</code> 대신에 <code>MemberRepositoryCustomImpl</code> 같이 구현해도 된다.</p>
+<br>
+<br>
+<p><strong>최신 사용자 정의 인터페이스 구현 클래스 예제</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@RequiredArgsConstructor</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberRepositoryCustomImpl</span> <span class="kd">implements</span> <span class="n">MemberRepositoryCustom</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="n">EntityManager</span> <span class="n">em</span><span class="o">;</span>
+
+    <span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberCustom</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select m from Member m&#34;</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><p>기존 방식보다 이 방식이 사용자 정의 인터페이스 이름과 구현 클래스 이름이 비슷하므로 더 직관적이다. <br> 추가로 여러 인터페이스를 분리해서 구현하는 것도 가능하기 때문에 새롭게 변경된 이 방식을 사용하는 것을 더 권장한다.</p>
+<br>
+<br>
+<br>
+<h2 id="2-auditing">2. Auditing</h2>
+<ul>
+<li>엔티티를 생성, 변경할 때 변경한 사람과 시간을 추적하고 싶으면?
+<ul>
+<li>등록일</li>
+<li>수정일</li>
+<li>등록자</li>
+<li>수정자</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="순수-jpa-사용">순수 JPA 사용</h3>
+<p><strong>우선 등록일, 수정일 적용</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Getter</span>
+<span class="nd">@MappedSuperclass</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">JpaBaseEntity</span> <span class="o">{</span>
+
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">updatable</span> <span class="o">=</span> <span class="kc">false</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">createdDate</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">updatedDate</span><span class="o">;</span>
+
+    <span class="nd">@PrePersist</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">prePersist</span><span class="o">()</span> <span class="o">{</span>
+        <span class="n">LocalDateTime</span> <span class="n">now</span> <span class="o">=</span> <span class="n">LocalDateTime</span><span class="o">.</span><span class="na">now</span><span class="o">();</span>
+        <span class="n">createdDate</span> <span class="o">=</span> <span class="n">now</span><span class="o">;</span>
+        <span class="n">updatedDate</span> <span class="o">=</span> <span class="n">now</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="nd">@PreUpdate</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">preUpdate</span><span class="o">()</span> <span class="o">{</span>
+        <span class="n">updatedDate</span> <span class="o">=</span> <span class="n">LocalDateTime</span><span class="o">.</span><span class="na">now</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><p><strong>JPA 주요 이벤트 어노테이션</strong></p>
+<ul>
+<li><code>@PrePersist</code>, <code>@PostPersist</code></li>
+<li><code>@PreUpdate</code>, <code>@PostUpdate</code></li>
+</ul>
+<br>
+<br>
+<h3 id="스프링-데이터-jpa-사용">스프링 데이터 JPA 사용</h3>
+<p><strong>설정</strong></p>
+<p><code>@EnableJpaAuditing</code> → 스프링 부트 설정 클래스에 적용해야함</p>
+<p><code>@EntityListeners(AuditingEntityListener.class)</code> → 엔티티에 적용</p>
+<br>
+<br>
+<p><strong>사용 어노테이션</strong></p>
+<ul>
+<li><code>@CreatedDate</code></li>
+<li><code>@LastModifiedDate</code></li>
+<li><code>@CreatedBy</code></li>
+<li><code>@LastModifiedBy</code></li>
+</ul>
+<br>
+<br>
+<p><strong>스프링 데이터 Auditing 적용 - 등록일, 수정일</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@EntityListeners</span><span class="o">(</span><span class="n">AuditingEntityListener</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+<span class="nd">@MappedSuperclass</span>
+<span class="nd">@Getter</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">BaseEntity</span> <span class="o">{</span>
+
+    <span class="nd">@CreatedBy</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">updatable</span> <span class="o">=</span> <span class="kc">false</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">createdBy</span><span class="o">;</span>
+
+    <span class="nd">@LastModifiedBy</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">lastModifiedBy</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>스프링 데이터 Auditing 적용 - 등록자, 수정자</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@EntityListeners</span><span class="o">(</span><span class="n">AuditingEntityListener</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+<span class="nd">@MappedSuperclass</span>
+<span class="nd">@Getter</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">BaseTimeEntity</span> <span class="o">{</span>
+
+    <span class="nd">@CreatedDate</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">updatable</span> <span class="o">=</span> <span class="kc">false</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">createdDate</span><span class="o">;</span>
+
+    <span class="nd">@LastModifiedDate</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">lastModifiedDate</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p>등록자, 수정자를 처리해주는 <code>AuditorAware</code> 스프링 빈 등록</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Bean</span>
+<span class="kd">public</span> <span class="n">AuditorAware</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="nf">auditorProvider</span><span class="o">()</span> <span class="o">{</span>
+	<span class="k">return</span> <span class="o">()</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">UUID</span><span class="o">.</span><span class="na">randomUUID</span><span class="o">().</span><span class="na">toString</span><span class="o">());</span>
+<span class="o">}</span>
+</code></pre></div><p>실무에서는 세션 정보나, 스프링 시큐리티 로그인 정보에서 ID를 받음</p>
+<br>
+<p><strong>참고</strong> <br> 실무에서 대부분의 엔티티는 등록시간, 수정시간이 필요하지만, 등록자, 수정자는 없을 수도 있다. <br> 그래서 다음과 같이 Base 타입을 분리하고, 원하는 타입을 선택해서 상속한다.</p>
+<br>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">class</span> <span class="nc">BaseTimeEntity</span> <span class="o">{</span>
+
+    <span class="nd">@CreatedDate</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">updatable</span> <span class="o">=</span> <span class="kc">false</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">createdDate</span><span class="o">;</span>
+
+    <span class="nd">@LastModifiedDate</span>
+    <span class="kd">private</span> <span class="n">LocalDateTime</span> <span class="n">lastModifiedDate</span><span class="o">;</span>
+<span class="o">}</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">BaseEntity</span> <span class="kd">extends</span> <span class="n">BaseTimeEntity</span> <span class="o">{</span>
+
+    <span class="nd">@CreatedBy</span>
+    <span class="nd">@Column</span><span class="o">(</span><span class="n">updatable</span> <span class="o">=</span> <span class="kc">false</span><span class="o">)</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">createdBy</span><span class="o">;</span>
+
+    <span class="nd">@LastModifiedBy</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">lastModifiedBy</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<p><strong>참고</strong> <br>저장시점에 등록일, 등록자는 물론이고, 수정일, 수정자도 같은 데이터가 저장된다. 데이터가 중복 저장되는 것 같지만, <br> 이렇게 해두면 변경 컬럼만 확인해도 마지막에 업데이트한 유저를 확인 할 수 있으므로 유지보수 관점에서 편리하다. <br> 이렇게 하지 않으면 변경 컬럼이 <code>null</code> 일때 등록 컬럼을 또 찾아야 한다. <br> 참고로 저장시점에 저장데이터만 입력하고 싶으면 <br> <code>@EnableJpaAuditing(modifyOnCreate = false)</code> 옵션을 사용하면 된다.</p>
+<br>
+<br>
+<br>
+<h2 id="3-web-확장---도메인-클래스-컨버터">3. Web 확장 - 도메인 클래스 컨버터</h2>
+<p>HTTP 파라미터로 넘어온 엔티티의 아이디로 엔티티 객체를 찾아서 바인딩</p>
+<br>
+<p><strong>도메인 클래스 컨버터 사용 전</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@RestController</span>
+<span class="nd">@RequiredArgsConstructor</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberController</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="n">MemberRepository</span> <span class="n">memberRepository</span><span class="o">;</span>
+
+    <span class="nd">@GetMapping</span><span class="o">(</span><span class="s">&#34;/members/{id}&#34;</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="n">String</span> <span class="nf">findMember</span><span class="o">(</span><span class="nd">@PathVariable</span><span class="o">(</span><span class="s">&#34;id&#34;</span><span class="o">)</span> <span class="n">Long</span> <span class="n">id</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findById</span><span class="o">(</span><span class="n">id</span><span class="o">).</span><span class="na">get</span><span class="o">();</span>
+        <span class="k">return</span> <span class="n">member</span><span class="o">.</span><span class="na">getUsername</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<p><strong>도메인 클래스 컨버터 사용 후</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@RestController</span>
+<span class="nd">@RequiredArgsConstructor</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberController</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="n">MemberRepository</span> <span class="n">memberRepository</span><span class="o">;</span>
+
+    <span class="nd">@GetMapping</span><span class="o">(</span><span class="s">&#34;/members/{id}&#34;</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="n">String</span> <span class="nf">findMember</span><span class="o">(</span><span class="nd">@PathVariable</span><span class="o">(</span><span class="s">&#34;id&#34;</span><span class="o">)</span> <span class="n">Member</span> <span class="n">member</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">member</span><span class="o">.</span><span class="na">getUsername</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>HTTP 요청은 회원 <code>id</code> 를 받지만 도메인 클래스 컨버터가 중간에 동작해서 회원 엔티티 객체를 반환</li>
+<li>도메인 클래스 컨버터도 리파지토리를 사용해서 엔티티를 찾음</li>
+</ul>
+<br>
+<p><strong>주의</strong> <br> 도메인 클래스 컨버터로 엔티티를 파라미터로 받으면, 이 엔티티는 단순 조회용으로만 사용해야 한다. <br>
+(트랜잭션이 없는 범위에서 엔티티를 조회했으므로, 엔티티를 변경해도 DB에 반영되지 않는다.)</p>
+<br>
+<br>
+<br>
+<h2 id="4-web-확장---페이징과-정렬">4. Web 확장 - 페이징과 정렬</h2>
+<p>스프링 데이터가 제공하는 페이징과 정렬 기능을 스프링 MVC에서 편리하게 사용할 수 있다.</p>
+<p><strong>페이징과 정려 예제</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@GetMapping</span><span class="o">(</span><span class="s">&#34;/members&#34;</span><span class="o">)</span>
+<span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="nf">list</span><span class="o">(</span><span class="nd">@PageableDefault</span><span class="o">(</span><span class="n">size</span> <span class="o">=</span> <span class="n">5</span><span class="o">)</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findAll</span><span class="o">(</span><span class="n">pageable</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">map</span><span class="o">(</span><span class="n">MemberDto</span><span class="o">::</span><span class="k">new</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>파라미터로 <code>Pageable</code> 을 받을 수 있다.</li>
+<li><code>Pageable</code> 은 인터페이스, 실제는 <code>org.springframework.data.domain.PageRequest</code> 객체 생성</li>
+</ul>
+<br>
+<p><strong>요청 파라미터</strong></p>
+<ul>
+<li><strong>예)</strong> <code>/members?page=0&amp;size=3&amp;sort=id,desc&amp;sort=username,desc</code></li>
+<li><strong>page</strong>: 현재 페이지, <strong>0부터 시작한다</strong>.</li>
+<li><strong>size</strong>: 한 페이지에 노출할 데이터 건수</li>
+<li><strong>sort</strong>: 정렬 조건을 정의한다. 예) 정렬 속성,정렬 속성&hellip;(ASC | DESC), <br> 정렬 방향을 변경하고 싶으면 <code>sort</code>
+파라미터 추가(<code>asc</code> 생략 가능)</li>
+</ul>
+<br>
+<br>
+<p><strong>기본값</strong></p>
+<ul>
+<li>글로벌 설정 : 스프링 부트</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">spring</span><span class="o">.</span><span class="na">data</span><span class="o">.</span><span class="na">web</span><span class="o">.</span><span class="na">pageable</span><span class="o">.</span><span class="na">default</span><span class="o">-</span><span class="n">page</span><span class="o">-</span><span class="n">size</span><span class="o">=</span><span class="n">20</span> <span class="o">/</span><span class="err">#</span> <span class="n">기본</span> <span class="n">페이지</span> <span class="n">사이즈</span><span class="o">/</span> 
+<span class="n">spring</span><span class="o">.</span><span class="na">data</span><span class="o">.</span><span class="na">web</span><span class="o">.</span><span class="na">pageable</span><span class="o">.</span><span class="na">max</span><span class="o">-</span><span class="n">page</span><span class="o">-</span><span class="n">size</span><span class="o">=</span><span class="n">2000</span>   <span class="o">/</span><span class="err">#</span> <span class="n">최대</span> <span class="n">페이지</span> <span class="n">사이즈</span><span class="o">/</span>
+</code></pre></div><ul>
+<li>개별 설정</li>
+</ul>
+<br>
+<br>
+<p><code>@PageableDefault</code> 어노테이션을 사용</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@RequestMapping</span><span class="o">(</span><span class="n">value</span> <span class="o">=</span> <span class="s">&#34;/members_page&#34;</span><span class="o">,</span> <span class="n">method</span> <span class="o">=</span> <span class="n">RequestMethod</span><span class="o">.</span><span class="na">GET</span><span class="o">)</span> 
+<span class="kd">public</span> <span class="n">String</span> <span class="nf">list</span><span class="o">(</span><span class="nd">@PageableDefault</span><span class="o">(</span><span class="n">size</span> <span class="o">=</span> <span class="n">12</span><span class="o">,</span> <span class="n">sort</span> <span class="o">=</span> <span class="err">“</span><span class="n">username</span><span class="err">”</span><span class="o">,</span> <span class="n">direction</span> <span class="o">=</span> <span class="n">Sort</span><span class="o">.</span><span class="na">Direction</span><span class="o">.</span><span class="na">DESC</span><span class="o">)</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span> 
+
+    <span class="o">...</span>
+
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>접두사</strong></p>
+<ul>
+<li>페이징 정보가 둘 이상이면 접두사로 구분</li>
+<li><code>@Qualifier</code> 에 접두사명 추가 &ldquo;{접두사명}_xxx&rdquo;</li>
+<li>예제: <code>/members?member_page=0&amp;order_page=1</code></li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="n">String</span> <span class="nf">list</span><span class="o">(</span>
+    <span class="nd">@Qualifier</span><span class="o">(</span><span class="s">&#34;member&#34;</span><span class="o">)</span> <span class="n">Pageable</span> <span class="n">memberPageable</span><span class="o">,</span> 
+    <span class="nd">@Qualifier</span><span class="o">(</span><span class="s">&#34;order&#34;</span><span class="o">)</span> <span class="n">Pageable</span> <span class="n">orderPageable</span><span class="o">,</span> 
+    <span class="o">...</span>
+<span class="o">)</span>
+</code></pre></div><br>
+<br>
+<h3 id="page-내용을-dto로-변환하기">Page 내용을 DTO로 변환하기</h3>
+<ul>
+<li>엔티티를 <code>API</code>로 노출하면 다양한 문제가 발생한다. 그래서 엔티티를 꼭 DTO로 변환해서 반환해야 한다.</li>
+<li>Page는 <code>map()</code> 을 지원해서 내부 데이터를 다른 것으로 변경할 수 있다.</li>
+</ul>
+<br>
+<p><strong>Member DTO</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Data</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberDto</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="n">Long</span> <span class="n">id</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">username</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">teamName</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nf">MemberDto</span><span class="o">(</span><span class="n">Long</span> <span class="n">id</span><span class="o">,</span> <span class="n">String</span> <span class="n">username</span><span class="o">,</span> <span class="n">String</span> <span class="n">teamName</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">id</span> <span class="o">=</span> <span class="n">id</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">username</span> <span class="o">=</span> <span class="n">username</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">teamName</span> <span class="o">=</span> <span class="n">teamName</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="nf">MemberDto</span><span class="o">(</span><span class="n">Member</span> <span class="n">member</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">id</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="na">getId</span><span class="o">();</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">username</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="na">getUsername</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<p><code>Page.map()</code> 사용</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@GetMapping</span><span class="o">(</span><span class="s">&#34;/members&#34;</span><span class="o">)</span> 
+<span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="nf">list</span><span class="o">(</span><span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">page</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findAll</span><span class="o">(</span><span class="n">pageable</span><span class="o">);</span>
+        <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="n">pageDto</span> <span class="o">=</span> <span class="n">page</span><span class="o">.</span><span class="na">map</span><span class="o">(</span><span class="n">MemberDto</span><span class="o">::</span><span class="k">new</span><span class="o">);</span>
+        <span class="k">return</span> <span class="n">pageDto</span><span class="o">;</span> 
+<span class="o">}</span>
+</code></pre></div><br>
+<p><code>Page.map()</code> 코드 최적화</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@GetMapping</span><span class="o">(</span><span class="s">&#34;/members&#34;</span><span class="o">)</span> 
+<span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="nf">list</span><span class="o">(</span><span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span> 
+    <span class="k">return</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findAll</span><span class="o">(</span><span class="n">pageable</span><span class="o">).</span><span class="na">map</span><span class="o">(</span><span class="n">MemberDto</span><span class="o">::</span><span class="k">new</span><span class="o">);</span> 
+<span class="o">}</span>
+</code></pre></div><p>Page를 1부터 시작하기</p>
+<ul>
+<li>스프링 데이터는 Page를 0부터 시작한다.</li>
+<li>만약 1부터 시작하려면?</li>
+</ul>
+<ol>
+<li>Pageable, Page를 파리미터와 응답 값으로 사용히지 않고, 직접 클래스를 만들어서 처리한다. <br> 그리고 직접 PageRequest(Pageable 구현체)를 생성해서 리포지토리에 넘긴다. <br> 물론 응답값도 Page 대신에 직접 만들어서 제공해야 한다.</li>
+<li><code>spring.data.web.pageable.one-indexed-parameters</code> 를 <code>true</code> 로 설정한다. <br> 그런데 이 방법은 web에서 <code>page</code> 파라미터를 <code>-1</code> 처리 할 뿐이다. 따라서 응답값인 <code>Page</code> 에 모두 <br> 0 페이지 인덱스를 사용하는 한계가 있다.</li>
+</ol>
+<br>
+<p><code>one-indexed-parameters</code> Page 1 요청 (<a href="http://localhost:8080/members?page=1" target="_blank" rel="noopener noreffer"><code>http://localhost:8080/members?page=1</code></a>)</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="o">{</span> 
+    <span class="s">&#34;content&#34;</span><span class="o">:</span> <span class="o">[</span> 
+        <span class="o">...</span>
+
+    <span class="o">],</span> 
+    <span class="s">&#34;pageable&#34;</span><span class="o">:</span> <span class="o">{</span>
+            <span class="s">&#34;offset&#34;</span><span class="o">:</span> <span class="n">0</span><span class="o">,</span>
+            <span class="s">&#34;pageSize&#34;</span><span class="o">:</span> <span class="n">10</span><span class="o">,</span>
+            <span class="s">&#34;pageNumber&#34;</span><span class="o">:</span> <span class="n">0</span> <span class="c1">// 0 인덱스 
+</span><span class="c1"></span>    <span class="o">},</span> 
+    <span class="s">&#34;number&#34;</span><span class="o">:</span> <span class="n">0</span><span class="o">,</span>        <span class="c1">// 0 인덱스 
+</span><span class="c1"></span>    <span class="s">&#34;empty&#34;</span><span class="o">:</span> <span class="kc">false</span>
+<span class="o">}</span>
+</code></pre></div></div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-31</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-extension/" data-title="확장 기능" data-hashtags="Spring Data JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-extension/" data-hashtag="Spring Data JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-extension/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-extension/" data-title="확장 기능" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/spring-data-jpa/">Spring Data JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/spring-data-jpa-query-method/" class="prev" rel="prev" title="쿼리 메소드"><i class="fas fa-angle-left fa-fw"></i>쿼리 메소드</a>
+            <a href="/posts/querydsl-basic-grammer/" class="next" rel="next" title="QueryDSL 기본 문법">QueryDSL 기본 문법<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

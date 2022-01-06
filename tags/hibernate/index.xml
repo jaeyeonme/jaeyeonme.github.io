@@ -3,7 +3,124 @@
         <title>Hibernate - Tag - 📚 | Dev Blog</title>
         <link>https://jaeyeonme.github.io/tags/hibernate/</link>
         <description>Hibernate - Tag - 📚 | Dev Blog</description>
-        <generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Thu, 30 Dec 2021 10:00:00 &#43;0000</lastBuildDate><atom:link href="https://jaeyeonme.github.io/tags/hibernate/" rel="self" type="application/rss+xml" /><item>
+        <generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Fri, 31 Dec 2021 10:30:00 &#43;0000</lastBuildDate><atom:link href="https://jaeyeonme.github.io/tags/hibernate/" rel="self" type="application/rss+xml" /><item>
+    <title>확장 기능</title>
+    <link>https://jaeyeonme.github.io/posts/spring-data-jpa-extension/</link>
+    <pubDate>Fri, 31 Dec 2021 10:30:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/posts/spring-data-jpa-extension/</guid>
+    <description><![CDATA[<div class="featured-image">
+                <img src="/images/JPA/spring-data-jpa.png" referrerpolicy="no-referrer">
+            </div>1. 사용자 정의 리포지토리 구현 사용자 정의 리포지토리 구현  스프링 데이터 JPA 리포지토리는 인터페이스만 정의하고 구현체는 스프링이 자동 생성 스프링 데이터 JPA가 제공하는 인터페이를 직접 구현하면 구현해야 하는 기능이 너무 많음 다양한 이유로 인터페이스의 메서드를 직접 구현하고 싶다면?  JPA 직접 사용(EntityManager) 스프링 JDBC Template 사용 MyBatis 사용 데이터베이스 커넥션 직접 사용 등등.. QueryDSL 사용    사용자 정의 인터페이스
+public interface MemberRepositoryCustom { List&lt;Member&gt; findMemberCustom(); } 
+사용자 정의 인터페이스 구현 클래스
+@RequiredArgsConstructor public class MemberRepositoryImpl implements MemberRepositoryCustom { private final EntityManager em; @Override public List&lt;Member&gt; findMemberCustom() { return em.createQuery(&#34;select m from Member m&#34;) .getResultList(); } } 
+사용자 정의 인터페이스 상속
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt;, MemberRepositoryCustom { } 
+사용자 정의 메서드 호출 코드
+List&lt;Member&gt; result = memberRepository.findMemberCustom(); 
+사용자 정의 구현 클래스
+ 규칙 : 리포지토리 인터페이스 이름 + Impl 스프링 데이터 JPA가 인식해서 스프링 빈으로 등록  Impl 대시 다른 이름으로 변경하고 싶으면?
+XML 설정
+&lt;repositories base-package=&#34;study.datajpa.repository&#34; repository-impl-postfix=&#34;Impl&#34; /&gt; 
+JavaConfig 설정
+@EnableJpaRepositories(basePackages = &#34;study.datajpa.repository&#34;, repositoryImplementationPostfix = &#34;Impl&#34;) 
+참고 실무에서는 주로 QueryDSL이나 SpringJdbcTemplate을 함께 사용할 때 사용자 정의 리포지토리 기능 자주 사용 항상 사용자 정의 리포지토리가 필요한 것은 아니다. 그냥 임의의 리포지토리를 만들어도 된다.
+예를들어 MemberQueryRepository를 인터페이스가 아닌 클래스로 만들고 스프링 빈으로 등록해서 그냥 직접 사용해도 된다. 물론 이 경우 스프링 데이터 JPA와는 아무런 관계 없이 별도로 동작한다.
+사용자 정의 리포지토리 구현 최신 방식 스프링 데이터 2.x 부터는 사용자 정의 구현 클래스에 리포지토리 인터페이스 이름 + Impl 을 적용하는 대신에 사용자 정의 인터페이스 명 + Impl 방식도 지원한다.
+예를 들어 위 예제의 MemberRepositoryImpl 대신에 MemberRepositoryCustomImpl 같이 구현해도 된다.
+최신 사용자 정의 인터페이스 구현 클래스 예제
+@RequiredArgsConstructor public class MemberRepositoryCustomImpl implements MemberRepositoryCustom { private final EntityManager em; @Override public List&lt;Member&gt; findMemberCustom() { return em.createQuery(&#34;select m from Member m&#34;) .getResultList(); } } 기존 방식보다 이 방식이 사용자 정의 인터페이스 이름과 구현 클래스 이름이 비슷하므로 더 직관적이다. 추가로 여러 인터페이스를 분리해서 구현하는 것도 가능하기 때문에 새롭게 변경된 이 방식을 사용하는 것을 더 권장한다.
+2. Auditing  엔티티를 생성, 변경할 때 변경한 사람과 시간을 추적하고 싶으면?  등록일 수정일 등록자 수정자    순수 JPA 사용 우선 등록일, 수정일 적용
+@Getter @MappedSuperclass public class JpaBaseEntity { @Column(updatable = false) private LocalDateTime createdDate; private LocalDateTime updatedDate; @PrePersist public void prePersist() { LocalDateTime now = LocalDateTime.now(); createdDate = now; updatedDate = now; } @PreUpdate public void preUpdate() { updatedDate = LocalDateTime.now(); } } JPA 주요 이벤트 어노테이션
+ @PrePersist, @PostPersist @PreUpdate, @PostUpdate  스프링 데이터 JPA 사용 설정
+@EnableJpaAuditing → 스프링 부트 설정 클래스에 적용해야함
+@EntityListeners(AuditingEntityListener.class) → 엔티티에 적용
+사용 어노테이션
+ @CreatedDate @LastModifiedDate @CreatedBy @LastModifiedBy  스프링 데이터 Auditing 적용 - 등록일, 수정일
+@EntityListeners(AuditingEntityListener.class) @MappedSuperclass @Getter public class BaseEntity { @CreatedBy @Column(updatable = false) private String createdBy; @LastModifiedBy private String lastModifiedBy; } 
+스프링 데이터 Auditing 적용 - 등록자, 수정자
+@EntityListeners(AuditingEntityListener.class) @MappedSuperclass @Getter public class BaseTimeEntity { @CreatedDate @Column(updatable = false) private LocalDateTime createdDate; @LastModifiedDate private LocalDateTime lastModifiedDate; } 
+등록자, 수정자를 처리해주는 AuditorAware 스프링 빈 등록
+@Bean public AuditorAware&lt;String&gt; auditorProvider() { return () -&gt; Optional.of(UUID.randomUUID().toString()); } 실무에서는 세션 정보나, 스프링 시큐리티 로그인 정보에서 ID를 받음]]></description>
+</item><item>
+    <title>쿼리 메소드</title>
+    <link>https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/</link>
+    <pubDate>Fri, 31 Dec 2021 09:30:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/posts/spring-data-jpa-query-method/</guid>
+    <description><![CDATA[<div class="featured-image">
+                <img src="/images/JPA/spring-data-jpa.png" referrerpolicy="no-referrer">
+            </div>1. 쿼리 메소드 기능  메소드 이름으로 쿼리 생성 NamedQuery @Query - 리파지토리 메소드에 쿼리 정의 파라미터 바인딩 반환 타입 페이징과 정렬 벌크성 수정 쿼리 @EntityGraph  쿼리 메소드 기능 3가지
+ 메소드 이름으로 쿼리 생성 메소드 이름으로 JPA namedQuery 호출 @Query 어노테이션을 사용해서 리포지토리 인터페이스에 쿼리 직접 정의  메소드 이름으로 쿼리 생성 메소드 이름을 분석해서 JPQL 쿼리 실행
+이름과 나이를 기준으로 회원을 조회하려면?
+순수 JPA 리포지토리
+public List&lt;Member&gt; findByUsernameAndAgeGreaterThen(String username, int age) { return em.createQuery(&#34;select m from Member m where m.username = :username and m.age &gt; :age&#34;) .setParameter(&#34;username&#34;, username) .setParameter(&#34;age&#34;, age) .getResultList(); } 
+순수 JPA 테스트 코드
+@Test public void findByUsernameAndAgeGreaterThen() { Member m1 = new Member(&#34;AAA&#34;, 10); Member m2 = new Member(&#34;AAA&#34;, 20); memberJpaRepository.save(m1); memberJpaRepository.save(m2); List&lt;Member&gt; result = memberJpaRepository.findByUsernameAndAgeGreaterThen(&#34;AAA&#34;, 15); assertThat(result.get(0).getUsername()).isEqualTo(&#34;AAA&#34;); assertThat(result.get(0).getAge()).isEqualTo(20); assertThat(result.size()).isEqualTo(1); } 
+스프링 데이터 JPA
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { List&lt;Member&gt; findByUsernameAndAgeGreaterThan(String username, int age); }  스프링 데이터 JPA는 메소드 이름을 분석해서 JPQL을 생성하고 실행  스프링 데이터 JPA가 제공하는 쿼리 메소드 기능
+ 조회: find…By ,read…By ,query…By get…By,  https://docs.spring.io/spring-data/jpa/docs/current/reference/html/ #repositories.query-methods.query-creation 예:) findHelloBy 처럼 &hellip;에 식별하기 위한 내용(설명)이 들어가도 된다.   COUNT: count…By 반환타입 long EXISTS: exists…By 반환타입 boolean 삭제: delete…By, remove…By 반환타입 long DISTINCT: findDistinct, findMemberDistinctBy LIMIT: findFirst3, findFirst, findTop, findTop3  https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.limit-query-result    참고 이 기능은 엔티티의 필드명이 변경되면 인터페이스에 정의한 메서드 이름도 꼭 함께 변경해야 한다. 그렇지 않으면 애플리케이션을 시작하는 시점에 오류가 발생한다. 이렇게 애플리케이션 로딩 시점에 오류를 인지할 수 있는 것이 스프링 데이터 JPA의 매우 큰 장점이다.
+2. JPA NamedQuery JPA의 NamedQuery를 호출할 수 있음
+@NamedQuery 어노테이션으로 Named 쿼리 정의
+@Entity @NamedQuery( name = &#34;Member.findByUsername&#34;, query = &#34;select m from Member m where m.username = :username&#34; ) public class Member { ... } 
+JPA를 직접 사용해서 Named 쿼리 호출
+public class MemberRepository { public List&lt;Member&gt; findByUsername(String username) { ... return em.createNamedQuery(&#34;Member.findByUsername&#34;, Member.class) .setParameter(&#34;username&#34;, username) .getResultList(); } } 
+스프링 데이터 JPA로 NamedQuery 사용
+@Query(name = &#34;Member.findByUsername&#34;) List&lt;Member&gt; findByUsername(@Param(&#34;username&#34;) String username); @Query 를 생략하고 메서드 이름만으로 Named 쿼리를 호출할 수 있다.
+스프링 데이터 JPA로 Named 쿼리 호출
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { // ** 여기 선언한 Member 도메인 클래스  List&lt;Member&gt; findByUsername(@Param(&#34;username&#34;) String username); }  스프링 데이터 JPA는 선언한 &ldquo;도메인 클래스 + .(점) + 메서드 이름&rdquo; 으로 Named 쿼리를 찾아서 실행 만약 실행할 Named 쿼리가 없으면 메서드 이름으로 쿼리 생성 전략을 사용한다. 필요하면 전략을 변경할 수 있지만 권장하지 않는다.  참고 : https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-lookup-strategies    참고 스프링 데이터 JPA를 사용하면 실무에서 Named Query를 직접 등록해서 사용하는 일은 드물다. 대신 @Query 를 사용해서 리포지토리 메소드에 쿼리를 직접 정의한다.
+3. @Query, 리포지토리 메소드에 쿼리 정의하기 메서드 JPQL 쿼리 작성 public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { @Query(&#34;select m from Member m where m.username = :username and m.age = :age&#34;) List&lt;Member&gt; findUser(@Param(&#34;username&#34;) String username, @Param(&#34;age&#34;) int age); }  @org.springframework.data.jpa.repository.Query 어노테이션을 사용 실행할 메서드에 정적 쿼리를 직접 작성하므로 이름 없는 Named 쿼리라 할 수 있음 JPA Named 쿼리처럼 애플리케이션 실행 시점에 문법 오류를 발견할 수 있음 (매우 큰 장점!)  참고 실무에서는 메소드 이름으로 쿼리 생성 기능은 파라미터가 증가하면 메서드 이름이 매우 지저분해진다.]]></description>
+</item><item>
+    <title>공통 인터페이스 기능</title>
+    <link>https://jaeyeonme.github.io/posts/spring-data-jpa-common-interface/</link>
+    <pubDate>Fri, 31 Dec 2021 09:00:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/posts/spring-data-jpa-common-interface/</guid>
+    <description><![CDATA[<div class="featured-image">
+                <img src="/images/JPA/spring-data-jpa.png" referrerpolicy="no-referrer">
+            </div>1. 순수 JPA기반 리포지토리 만들기  기본 CRUD  저장 변경 → 변경감지 사용 삭제 전체 조회 단건 조회 카운트     참고: JPA에서 수정은 변경감지 기능을 사용하면 된다. 트랜잭션 안에서 엔티티를 조회한 다음에 데이터를 변경하면, 트랜잭션 종료 시점에 변경감지 기능이 작동해서 변경된 엔티티를 감지하고 UPDATE SQL을 실행한다.
+ 순수 JPA 기반 리포지토리
+@Repository public class MemberJpaRepository { @PersistenceContext private EntityManager em; // Create (저장)  public Member save(Member member) { em.persist(member); return member; } // Delete (삭제)  public void delete(Member member) { em.remove(member); } // Read (조회)  public List&lt;Member&gt; findAll() { // JPQL  return em.createQuery(&#34;select m from Member m&#34;, Member.class) .getResultList(); } public Optional&lt;Member&gt; findById(Long id) { Member member = em.find(Member.class, id); return Optional.ofNullable(member); } public long count() { return em.createQuery(&#34;select count(m) from Member m&#34;, Long.class) .getSingleResult(); } public Member find(Long id) { return em.find(Member.class, id); } }  회원 리포지토리와 거의 동일하다.  2. 공통 인터페이스 설정 javaConfig 설정 - 스프링 부트 사용시 생략 가능 @Configuration @EnableJpaRepositories(basePackages = &#34;jpabook.jpashop.repository&#34;) public class AppConfig {}  스프링 부트 사용시 @SpringBootApplication 위치를 지정(해당 패키지와 하위 패키지 인식) 만약 위치가 달라지면 @EnableJpaRepositories 필요  스프링 데이터 JPA가 구현 클래스 대신 생성  org.springframework.data.repository.Repository 를 구현한 클래스는 스캔 대상  MemberRepository 인터페이스가 동작한 이유 실제 출력해보기(Proxy) memberRepository.getClass() → class com.sun.proxy.$ProxyXXX   @Repository 애노테이션 생략 가능  컴포넌트 스캔 스프링 데이터 JPA가 자동으로 처리 JPA 예외를 스프링 예외로 변환하는 과정도 자동으로 처리    3. 공통 인터페이스 적용 순수 JPA로 구현한 MemberJpaRepository 대신에 스프링 데이터 JPA가 제공하는 공통 인터페이스 사용
+스프링 데이터 JPA 기반 Repository public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { }  Generic  T : 엔티티 타입 ID : 식별자 타입(PK)    4. 공통 인터페이스 분석  JpaRepository 인터페이스 : 공통 CURD 제공 제네릭은 &lt;엔티티 타입, 식별자 타입&gt; 설정  JpaRepository 공통 기능 인터페이스
+public interface JpaRepository&lt;T, ID extends Serializable&gt; extends PagingAndSortingRepository&lt;T, ID&gt; { ... } 
+JpaRepository 를 사용하는 인터페이스
+public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { } 
+공통 인터페이스 구성 주의
+ T findOne(ID) → Optional&lt;T&gt; findById(ID) 변경  제네릭 타입
+ T : 엔티티 ID : 엔티티의 식별자 타입 S : 엔티티와 그 자식 타입  주요 메서드
+ save(S) : 새로운 엔티티는 저장하고 이미 있는 엔티티는 병합한다. delete(T) : 엔티티 하나르 삭제한다. 내부에서 EntityManager.remove() 호출 findById(ID) : 엔티티 하나를 조회한다. 내부에서 EntityManager.find() 호출 getOne(ID) : 엔티티를 프록시로 조회한다. 내부에서 EntityManager.getReference() 호출 findAll(...) : 모든 엔티티를 조회한다. 정렬(Sort)이나 페이징(Pageable) 조건을 파라미터로 제공할 수 있다.  참고: JpaRepository 는 대부분의 공통 메서드를 제공한다.]]></description>
+</item><item>
+    <title>객체지향 쿼리 언어 - 중급 문법</title>
+    <link>https://jaeyeonme.github.io/posts/jpa-object-query-language2/</link>
+    <pubDate>Thu, 30 Dec 2021 10:20:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/posts/jpa-object-query-language2/</guid>
+    <description><![CDATA[<div class="featured-image">
+                <img src="/images/JPA/jpa.png" referrerpolicy="no-referrer">
+            </div>1. 경로 표현식  .(점)을 찍어 객체 그래프를 탐색하는 것 select m.username -&gt; 상태 필드 from Member m join m.team t -&gt; 단일 값 연관 필드 join m.orders o -&gt; 컬렉션 값 연관 필드 where t.name = &#39;팀A&#39; 
+경로 표현식 용어 정리
+ 상태 필드(state field): 단순히 값을 저장하기 위한 필드(ex: m.usernmae) 연관 필드(association field): 연관관계를 위한 필드  단일 값 연관 필드:  @ManyToOne, @OneToOne: 대상이 엔티티(ex: m.team)  컬렉션 값 연관 필드:  @OneToMany, @ManyToMany, 대상이 컬렉션(ex m.orders)   경로 표현식 특징
+  상태 필드(state field): 경로 탐색의 끝, 탐색x
+  단일 값 연관 경로: 묵시적 내부 조인(inner join)발생, 탐색O
+select m.team.name from Member m; //team에서 경로탐색이 더 가능하다(name)   컬렉션 값 연관 경로: 묵시적 내부 조인 발생, 탐색X
+  FROM 절에서 명시적 조인을 통해 별칭을 얻으면 별칭을 통해 탐색 가능
+select m.username from Team t join t.members m;     실무에서는 명시적 조인을 사용하자.
+조인은 SQL 튜닝에 중요 포인트
+묵시적 조인은 조인이 일어나는 상황을 한눈에 파악하기 어려움
+2. JPQL - 페치 조인 (fetchjoin)   SQL 조인 종류는 아니고 JPA에서 제공하는 기능이다. JPQL에서 성능 최적화를 위해 제공하는 기능. 연관된 엔티티나 컬렉션을 SQL 한 번에 함께 조회하는 기능 join fetch 명령어 사용 페치 조인 :: = [LEFT [OUTER] | INNER ] JOIN FETCH 조인 경로  엔티티 페치 조인
+  회원을 조회하면서 연관된 팀도 함께 조회(SQL 한 번에)
+//JPQL select m from Member m join fetch m.team //SQL select m.* t.* from Member m inner join Team t on m.team_id = t.id;     도식화
+팀이 있는 회원을 조회하고 싶을 때 fetch join을 사용하면 내부적으로 inner join을 사용한다.
+팀이 없는 회원은 누락된다.
+  페치 조인 사용 코드
+  기존 연관관계 조회 로직의 문제
+String jpql = &#34;select m from Member m&#34;; List&lt;Member&gt; members = em.createQuery(jpql, Member.class) .getResultList(); for (Member member : members) { System.out.println(&#34;username = &#34; + member.getUsername() + &#34;, &#34; + &#34;teamName = &#34; + member.getTeam().name()); //회원1, 팀A(SQL) //회원2, 팀A(1차 캐시) //회원3, 팀B(SQL)  //회원 100명 -&gt; N + 1 } 최초 jpql을 통해 Member를 조회해 올때 Team의 정보는 Proxy객체로 가지고 있다. (실제론 없다는 의미) 그렇기에 실제로 getTeam().getName()을 통해 팀의 정보를 조회하려고 할 때 SQL을 수행한다. 주석 내용대로 한번 가져온 Team의 정보는 1차 캐시에 올라가 있기 때문에 더 조회할 필요는 없지만, 회원을 N명 조회하게 되었을때 최대 N + 1 번 Team 조회 쿼리가 수행 될 수 있다.
+    페치 조인을 통한 해결
+String jpql = &#34;select m from Member m join fetch m.team&#34;; List&lt;Member&gt; members = em.createQuery(jpql, Member.class) .getResultList(); for (Member member : members) { //페치 조인으로 회원과 팀을 함께 조회해서 지연 로딩X  System.out.println(&#34;username = &#34; + member.getUsername() + &#34;, &#34; + &#34;teamName = &#34; + member.getTeam().name()); } 페치조인은 조회 당시에 실제 엔티티가 담긴다. 그렇기 때문에 지연로딩 없이 바로 사용이 가능하다.
+  실무에서 자주 사용된다. 컬렉션 페치 조인
+ 일대다 관계, 컬렉션 페치 조인  //JPQL select t from Team t join fetch t.members where t.name = &#39;팀A&#39;; //SQL select t.*, m.* from team t, inner join member m on t.]]></description>
+</item><item>
     <title>객체지향 쿼리 언어 - 기본 문법</title>
     <link>https://jaeyeonme.github.io/posts/jpa-object-query-language1/</link>
     <pubDate>Thu, 30 Dec 2021 10:00:00 &#43;0000</pubDate>
@@ -156,59 +273,5 @@ fetch = FetchType.LAZY
   Team 객체에 members라는 List를 추가해서 양방향 연관관계를 만들어준다.
 @Entity public class Team{ ... @OneToMany(mappedBy = &#34;team&#34;) private List&lt;Member&gt; members = new ArrayList&lt;&gt;(); ... }     추가한 members 를 확인하는 코드를 작성해보자.
 Member findMember = em.find(Member.class, member.getId()); List&lt;Member&gt; members = findMember.getTeam().getMembers(); for (Member member1 : members) { System.out.println(&#34;member1.getName() = &#34; + member1.getName()); // member1.getName() = mamber1 }  이제 반대방향으로도 객체 그래프 탐색이 가능해졌다.    연관관계의 주인과 mappedBy  mappedBy = 연관관계의 개념에 대해 이해를 어렵게 만드는 주범! 객체와 테이블간 연관관계를 맺는 차이를 이해해야 한다.  객체와 테이블이 관계를 맺는 차이란?  객체 연관관계 = 2개  회원 → 팀 연관관계 1개(단방향) 팀 → 회원 연관관계 1개(단방향)   테이블 연관관계 = 1개  회원 ←→ 팀의 연관관계 1개(양방향)    결국 양방향 관계란  객체의 양방향 관계는 사실 양방향 관계가 아니라 서로 다른 단방향 관계 2개다.]]></description>
-</item><item>
-    <title>엔티티매핑</title>
-    <link>https://jaeyeonme.github.io/posts/jpa-entity-mapping/</link>
-    <pubDate>Wed, 29 Dec 2021 12:10:00 &#43;0000</pubDate>
-    <author>Author</author>
-    <guid>https://jaeyeonme.github.io/posts/jpa-entity-mapping/</guid>
-    <description><![CDATA[<div class="featured-image">
-                <img src="/images/JPA/jpa.png" referrerpolicy="no-referrer">
-            </div>엔티티 매핑 소개   객체와 테이블 매핑 : @Entity , @Table 필드와 컬럼 매핑 : @Column 기본 키 매핑 : @Id 연관관계 매핑 : @ManyToOne , @JoinColumn  JPA로 데이터베이스 스키마를 자동 생성하는 방법 JPA로 어플리케이션 로딩 시점에 테이블을 생성할 수 있다. 일일이 스키마를 수정하기 힘든 개발 환경에서 사용하면 좋다. 운영에서 쓰려면 절대 그대로 사용해서 안 되고 다듬어야 한다.
-엔티티 매핑을 해놓으면, JPA가 어플리케이션 실행 시점에 DDL을 자동 생성하여 수행한다. 객체 중심으로 개발해 놓기만 하면 되니 테이블을 건드릴 필요 없다. 게다가 데이터베이스 방언(dialect)를 활용해 DB에 알맞는 DDL을 만든다.
-스프링 부트에선 spring.jpa.hibernate.ddl-auto 속성으로 스키마 생성 전략을 설정할 수 있다.
-  create : 기존 테이블 삭제 후 다시 생성 (DROP -&gt; CREATE)
-  create-drop : create + 종료 시점 drop (DROP -&gt; CREATE -&gt; DROP)
-  update : 추가된 사항만 반영, 이미 반영된 것을 지우는 작업은 불가능! (특히 운영DB에서 사용하면 안 됨)
-  validate : 엔티티와 테이블이 알맞게 매핑되었는지 검증
-  none : 사용하지 않음
-  로컬 서버에서 자유롭게 사용하고, 여러 명의 개발자가 사용하는 서버에선 사용하지 않는 게 좋다.
-create / create-drop은 기존 테이블을 드랍하기 때문에 기존 데이터를 날려버리고, update는 alter문을 실행하면서 테이블 lock을 걸기 때문에 조심해야 한다.
-실무에서는 validate 를 사용
-1. 객체와 테이블 매핑 @Entity   @Entity가 붙은 클래스는 JPA가 관리, 엔티티라 한다. JPA를 사용해서 테이블과 매핑할 클래스는 @Entity 필수 주의  기본 생성자 필수 (파라미터가 없는 public 또는 protected 생성자) final 클래스, enum, interface, inner 클래스 사용X 저장할 필드에 final 사용X    @Entity 속성 정리   속성 : name  JPA에서 사용할 엔티티 이름을 지정한다. 기본값 : 클래스 이름을 그대로 사용 (예: Member) 같은 클래스 이름이 없으면 가급적 기본값을 사용한다.    주의할 점
- 기본 생성자 필수 (public or protected) final 클래스 / inner 클래스 / enum / interface 에는 사용 불가능 DB 컬럼과 매핑될 필드에 final 사용 불가능  @Table   @Table은 엔티티와 매핑할 테이블 지정     속성 기능 기본값     name 매핑할 테이블 이름 엔티티 이름을 사용   catalog 데이터베이스 catalog 매핑    schema 데이터베이스 schema 매핑    uniqueConstrints (DDL) DDL 생성 시에 유니크 제약 조건 생성     2. 데이터베이스 스키마 자동 생성  데이터베이스 스키마 자동 생성  DDL을 어플리케이션 실행 시점에 자동 생성 테이블 중심 → 객체 중심 데이터베이스 방언을 활용해서 데이터베이스에 맞는 적절한 DDL 생성 이렇게 생성된 DDL은 개발 장비에서만 사용 생성된 DDL은 운영서버에서는 사용되지 않거나 적절히 다듬은 후 사용  데이터베이스 스키마 자동 생성 - 속성  hibernate.hbm2ddl.auto  create : 기존 테이블 삭제 후 다시 생성 (DROP + CREATE) create-drop : create와 같으나 종료시점에 테이블 DROP update : 변경분만 반영 (운영DB에는 사용하면 안됨) validate : 엔티티와 테이블이 정상 매핑되었는지만 확인 none : 사용하지 않음    DDL 생성 기능  제약조건 추가 : 회원 이름 필수 , 10자 초과 X  @Column(nullable = false, length = 10)   유니크 제약조건 추가  @Table(uniqueConstraints = {@UniqueCOnstraint(name = &quot;NAME_AGE_UNIQUE&quot;, columnNames = {&quot;NAME&quot;, &quot;AGE&quot;})})   DDL 생성 기능은 DDL을 자동 생성할 때만 사용되고 JPA의 실행 로직에는 영향을 주지 않는다.]]></description>
-</item><item>
-    <title>영속성관리 - 내부 동작 방식</title>
-    <link>https://jaeyeonme.github.io/posts/jpa-persistence-management-works/</link>
-    <pubDate>Wed, 29 Dec 2021 12:00:00 &#43;0000</pubDate>
-    <author>Author</author>
-    <guid>https://jaeyeonme.github.io/posts/jpa-persistence-management-works/</guid>
-    <description><![CDATA[<div class="featured-image">
-                <img src="/images/JPA/jpa.png" referrerpolicy="no-referrer">
-            </div>1. 영속성 컨텍스트  웹 어플리케이션이 구동하는 시점에 EntityManagerFactory 를 생성하여 가지고 있으며, 사용자의 요청이 있을 때 EntityManager를 생성하여 커넥션 풀(Connection Pool)을 사용해서 DB를 핸들링 하게 된다.  영속성 컨텍스트란?   엔티티를 영구 저장하는 환경
-  EntityManager.persist(entity);
-→ DB에 저장한다기 보다는 영속성 컨텍스트를 통해 엔티티를 영속화 한다는 의미
- 영속성 컨텍스트에 엔티티를 저장한다는 말    영속성 컨텍스트는 논리적인 개념
-  눈에 보이지 않는다.
-  엔티티 매니저를 통해서 영속성 컨텍스트에 접근
- J2SE 환경    엔티티의 생명 주기  비영속(new / transient): 영속성 컨텍스트와 전혀 관계가 없는 새로운 상태 영속(managed): 영속성 컨텍스트에 관리되는 상태 준영속(detached): 영속성 컨텍스트에 저장되었다가 분리된 상태 삭제(removed): 삭제된 상태  비영속 : JPA에 관계없이 객체 생성만 된 상태
-// 객체를 생성한 상태(비영속) Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); 
-영속 // 객체를 생성한 상태(비영속) Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); EntityManager em = emf.createEntityManager(); em.getTransaction().begin(); // 객체를 저장한 상태(영속) em.persist(member); 
-준영속, 삭제 // 회원 엔티티를 영속성 컨텍스트에서 분리, 준영속 상태 em.detach(member); // 객체를 삭제한 상태(삭제) em.remove(member);  준영속: 영속성 컨텍스트에서 삭제하는 것 삭제는 실제로 DB에서 해당 ROW를 삭제하는 것  2. 영속성 컨텍스트의 이점 1. 1차 캐시 Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); //1차 캐시에 저장됨 em.persist(member); //1차 캐시에서 조회 Member findMember = em.find(Member.class, &#34;member1&#34;);  조회 시 영속 컨텍스트안에서 1차 캐시를 조회 후 해당 엔티티가 있을 경우 캐시를 조회 해 온다. 조회 시 영속 컨텍스트 안에서 1차 캐시를 조회 후 해당 엔티티가 없을 경우 데이터베이스에서 조회해 온다. 데이터베이스 트랜잭션 내부에서 만들고 종료되기 때문에 하나의 비즈니스 로직이 종료될 경우 1차캐시는 다 사라지기 때문에 큰 도움이 되지 않는다. (비즈니스 로직이 복잡해 질 수록 효과는 커진다.)  2. 동일성(identity) 보장 Member findMember = em.find(Member.class, 100L); Member findMember2 = em.find(Member.class, 100L); System.out.println(findMember == findMember2); // true : 1차 캐시로 반복 가능한 읽기(REPEATABLE READ) 등급의 트랜잭션 격리 수준을 데이터베이스가 아닌 애플리케이션 차원에서 제공
- 참고: 트랜잭션의 격리수준이 궁금하면 트랜잭션이 보장해야 하는 ACID를 기억하자.
- 3. 엔티티 등록 - 트랜잭션을 지원하는 쓰지지연 Member member = new Member(150L, &#34;A&#34;); Member member2 = new Member(160L, &#34;B&#34;); em.persist(member); em.persist(member2); // 엔티티 등록은 아직 수행되지 않는다. (쓰지 지연)  System.out.println(&#34;=========&#34;); tx.commit(); // 에티티 등록은 이 떄 동시에 수행된다. 
-memberA와 memberrB는 둘 다 쓰기지연 SQL저장소에 저장되어있고 실제 DB에 적용은 안된 상태
-commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜서 DB에 적용한다.
-쓰기 지연을 사용하는 이유
--&gt; 버퍼링 기능이 제공
-&lt;property name=&#34;hibernate.jdbc.batch_size&#34; value=&#34;10&#34;/&gt; -&gt; 10개씩 쌓일때마다 적용하게 하는 기능
--&gt; 쿼리를 여러번 날리지 않고 최적화가 가능하다.
-4. 엔티티 수정 - 변경감지(Dirty Checking) transaction.begin(); //엔티티 조회 Member findMember = em.find(Member.class, &#34;memberA&#34;); //영속 엔티티 데이터 수정 findMember.setUsername(&#34;hi&#34;); findMember.setAge(10); transaction.commit(); → 1차 캐시안에는 @Id, Entity , 스냅샷 이 있다. 여기서 스냅샷 은 최초로 영속성 컨텍스트(1차캐시)에 들어오는순간 스냅샷을 찍어서 저장해둔다.
-→ JPA는 트랜잭션이 커밋(commit)되는 순간 엔티티와 스냅샷을 모두 비교한다.
-→ 변경된 것이 있을 경우 쓰기지연 SQL 저장소 에 업데이트 쿼리를 저장하고 수행하게 된다.
-5. 엔티티 삭제 //삭제 대상 엔티티 조회 Member member = em.find(Member.class, &#34;memberA&#34;); em.remove(member);//엔티티 삭제 
-3. 플러시(flush) : 영속성 컨텍스트의 변경을 데이터베이스에 반영(sync)
-  플러시 발생
- 변경 감지 수정된 엔티티 쓰기지연 SQL 저장소에 등록 쓰기 지연 SQL저장소의 쿼리를 데이터베이스에 전송(등록, 수정, 삭제 쿼리)    영속성 컨텍스트를 플러시 하는 방법]]></description>
 </item></channel>
 </rss>

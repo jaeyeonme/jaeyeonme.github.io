@@ -3,7 +3,37 @@
         <title>JPA - Tag - 📚 | Dev Blog</title>
         <link>https://jaeyeonme.github.io/tags/jpa/</link>
         <description>JPA - Tag - 📚 | Dev Blog</description>
-        <generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Thu, 30 Dec 2021 10:00:00 &#43;0000</lastBuildDate><atom:link href="https://jaeyeonme.github.io/tags/jpa/" rel="self" type="application/rss+xml" /><item>
+        <generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Thu, 30 Dec 2021 10:20:00 &#43;0000</lastBuildDate><atom:link href="https://jaeyeonme.github.io/tags/jpa/" rel="self" type="application/rss+xml" /><item>
+    <title>객체지향 쿼리 언어 - 중급 문법</title>
+    <link>https://jaeyeonme.github.io/posts/jpa-object-query-language2/</link>
+    <pubDate>Thu, 30 Dec 2021 10:20:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/posts/jpa-object-query-language2/</guid>
+    <description><![CDATA[<div class="featured-image">
+                <img src="/images/JPA/jpa.png" referrerpolicy="no-referrer">
+            </div>1. 경로 표현식  .(점)을 찍어 객체 그래프를 탐색하는 것 select m.username -&gt; 상태 필드 from Member m join m.team t -&gt; 단일 값 연관 필드 join m.orders o -&gt; 컬렉션 값 연관 필드 where t.name = &#39;팀A&#39; 
+경로 표현식 용어 정리
+ 상태 필드(state field): 단순히 값을 저장하기 위한 필드(ex: m.usernmae) 연관 필드(association field): 연관관계를 위한 필드  단일 값 연관 필드:  @ManyToOne, @OneToOne: 대상이 엔티티(ex: m.team)  컬렉션 값 연관 필드:  @OneToMany, @ManyToMany, 대상이 컬렉션(ex m.orders)   경로 표현식 특징
+  상태 필드(state field): 경로 탐색의 끝, 탐색x
+  단일 값 연관 경로: 묵시적 내부 조인(inner join)발생, 탐색O
+select m.team.name from Member m; //team에서 경로탐색이 더 가능하다(name)   컬렉션 값 연관 경로: 묵시적 내부 조인 발생, 탐색X
+  FROM 절에서 명시적 조인을 통해 별칭을 얻으면 별칭을 통해 탐색 가능
+select m.username from Team t join t.members m;     실무에서는 명시적 조인을 사용하자.
+조인은 SQL 튜닝에 중요 포인트
+묵시적 조인은 조인이 일어나는 상황을 한눈에 파악하기 어려움
+2. JPQL - 페치 조인 (fetchjoin)   SQL 조인 종류는 아니고 JPA에서 제공하는 기능이다. JPQL에서 성능 최적화를 위해 제공하는 기능. 연관된 엔티티나 컬렉션을 SQL 한 번에 함께 조회하는 기능 join fetch 명령어 사용 페치 조인 :: = [LEFT [OUTER] | INNER ] JOIN FETCH 조인 경로  엔티티 페치 조인
+  회원을 조회하면서 연관된 팀도 함께 조회(SQL 한 번에)
+//JPQL select m from Member m join fetch m.team //SQL select m.* t.* from Member m inner join Team t on m.team_id = t.id;     도식화
+팀이 있는 회원을 조회하고 싶을 때 fetch join을 사용하면 내부적으로 inner join을 사용한다.
+팀이 없는 회원은 누락된다.
+  페치 조인 사용 코드
+  기존 연관관계 조회 로직의 문제
+String jpql = &#34;select m from Member m&#34;; List&lt;Member&gt; members = em.createQuery(jpql, Member.class) .getResultList(); for (Member member : members) { System.out.println(&#34;username = &#34; + member.getUsername() + &#34;, &#34; + &#34;teamName = &#34; + member.getTeam().name()); //회원1, 팀A(SQL) //회원2, 팀A(1차 캐시) //회원3, 팀B(SQL)  //회원 100명 -&gt; N + 1 } 최초 jpql을 통해 Member를 조회해 올때 Team의 정보는 Proxy객체로 가지고 있다. (실제론 없다는 의미) 그렇기에 실제로 getTeam().getName()을 통해 팀의 정보를 조회하려고 할 때 SQL을 수행한다. 주석 내용대로 한번 가져온 Team의 정보는 1차 캐시에 올라가 있기 때문에 더 조회할 필요는 없지만, 회원을 N명 조회하게 되었을때 최대 N + 1 번 Team 조회 쿼리가 수행 될 수 있다.
+    페치 조인을 통한 해결
+String jpql = &#34;select m from Member m join fetch m.team&#34;; List&lt;Member&gt; members = em.createQuery(jpql, Member.class) .getResultList(); for (Member member : members) { //페치 조인으로 회원과 팀을 함께 조회해서 지연 로딩X  System.out.println(&#34;username = &#34; + member.getUsername() + &#34;, &#34; + &#34;teamName = &#34; + member.getTeam().name()); } 페치조인은 조회 당시에 실제 엔티티가 담긴다. 그렇기 때문에 지연로딩 없이 바로 사용이 가능하다.
+  실무에서 자주 사용된다. 컬렉션 페치 조인
+ 일대다 관계, 컬렉션 페치 조인  //JPQL select t from Team t join fetch t.members where t.name = &#39;팀A&#39;; //SQL select t.*, m.* from team t, inner join member m on t.]]></description>
+</item><item>
     <title>객체지향 쿼리 언어 - 기본 문법</title>
     <link>https://jaeyeonme.github.io/posts/jpa-object-query-language1/</link>
     <pubDate>Thu, 30 Dec 2021 10:00:00 &#43;0000</pubDate>

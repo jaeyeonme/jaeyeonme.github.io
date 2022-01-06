@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>QueryDSL 중급 문법 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="QueryDSL 중급 문법" />
+<meta property="og:description" content="프로젝션과 결과 반환 - 기본 프로젝션 : select 대상 지정
+프로젝션 대상이 하나
+List&lt;String&gt; result = queryFactory .select(member.username) .from(member) .fetch();  프로젝션 대상이 하나면 타입을 명확하게 지정할 수 있음(List&lt;String&gt;) 프로젝션 대상이 둘 이상이면 튜플이나 DTO로 조회  튜플 조회 프로젝션 대상이 둘 이상일 때 사용
+com.querydsl.core.Tuple
+List&lt;Tuple&gt; result = queryFactory .select(member.username, member.age) .from(member) .fetch(); for (Tuple tuple : result) { String username = tuple.get(member.username); Integer age = tuple.get(member.age); System.out.println(&#34;username = &#34; &#43; username); System.out.println(&#34;age = &#34; &#43; age); }  Tuple 은 리포지토리 계층안에서 쓰는 정도는 괜찮지만 그 밖의 계층에서는 DTO로 변환해서 쓰는 것이 좋다. → Tuple 도 결국 Querydsl에 종속적이기 떄문  프로젝션과 결과 반환 - DTO 조회 순수 JPA에서 DTO 조회 위에서 select 절에서 대상을 지정(프로젝션)해서 가져오고 싶을때 그 대상이 둘 이상이면 Tuple로 가져왔었다. 하지만, 그 외 계층으로 가져갈 때는 DTO로 가져가는게 좋다. 우선 순수 JPA를 이용해서 DTO로 조회하는 코드를 작성해보자.
+MemberDto
+@Data @NoArgsConstructor public class MemberDto { private String username; private int age; public MemberDto(String username, int age) { this.username = username; this.age = age; } } 
+순수 JPA에서 DTO 조회 코드
+@Test public void findDtoByJPQL() { List&lt;MemberDto&gt; result = em.createQuery(&#34;select new study.querydsl.dto.MemberDto(m.username, m.age) from Member m&#34;, MemberDto.class) .getResultList(); for (MemberDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } }  순수 JPA에서 DTO를 조회할 때는 new 명령어를 사용해야 함 DTO의 package이름을 다 적어줘야해서 지저분함 생성자 방식만 지원함  QueryDSL 빈 생성 (Bean Population) 결과를 DTO반환할 떄 사용하며 3가지 방법이 존재한다.
+ 프로퍼티 접근 필드 직접 접근 생성자 사용  프로퍼티 접근 - Setter
+@Test public void findDtoBySetter() { List&lt;MemberDto&gt; result = queryFactory .select(Projections.bean(MemberDto.class, member.username, member.age)) .from(member) .fetch(); for (MemberDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } }  Projections.bean(주입대상클래스, 프로퍼티1, 프로퍼티2&hellip;)방식으로 프로퍼티에 값을 주입  필드 직접 접근
+@Test public void findDtoByField() { List&lt;MemberDto&gt; result = queryFactory .select(Projections.fields(MemberDto.class, member.username, member.age)) .from(member) .fetch(); for (MemberDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } }  Getter, Setter가 없어도 필드에 바로 값을 주입 Projections.fields(주입대상클래스, 필드1, 필드2&hellip;)  필드 직접 접근 - 별칭이 다를 때
+@Test public void findUserDtoByField() throws Exception { QMember memberSub = new QMember(&#34;memberSub&#34;); List&lt;UserDto&gt; result = queryFactory .select(Projections.fields(UserDto.class, member.username.as(&#34;name&#34;), ExpressionUtils.as(JPAExpressions .select(memberSub.age.max()) .from(memberSub), &#34;age&#34;) )) .from(member) .fetch(); for (UserDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } }  필드나 프로퍼티명 접근 생성방식에서 이름이 다를 때 해결방안을 as(name)을 이용해서 해결한다. ExpressionUtils.as(source,alias) : 필드나 서브 쿼리에 별칭 적용 username.as(&quot;memberName&quot;) : 필드에 별칭 적용  생성자 적용
+@Test public void findDtoByConstructor() { List&lt;MemberDto&gt; result = queryFactory .select(Projections.constructor(MemberDto.class, member.username, member.age)) .from(member) .fetch(); for (MemberDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } } 
+프로젝션과 결과 반환 - @QueryProjection 프로젝션결과를 반환할 DTO에 @QueryProjection 을 생성자에 붙혀준 뒤 gradle → tasks → other → compileQuerydsl 을 통해 DTO도 Q타입으로 생성해 준다.
+생성자 &#43; @QueryProjection @Data @NoArgsConstructor public class MemberDto { private String username; private int age; @QueryProjection public MemberDto(String username, int age) { this.username = username; this.age = age; } }  ./gradlew compileQuerydsl QMemberDto 생성 확인  @QueryProjection 활용 @Test public void findDtoByQueryProjection() throws Exception{ List&lt;MemberDto&gt; result = queryFactory ." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/querydsl-intermediate-grammer/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-31T13:00:00+00:00" />
+<meta property="article:modified_time" content="2021-12-31T13:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="QueryDSL 중급 문법"/>
+<meta name="twitter:description" content="프로젝션과 결과 반환 - 기본 프로젝션 : select 대상 지정
+프로젝션 대상이 하나
+List&lt;String&gt; result = queryFactory .select(member.username) .from(member) .fetch();  프로젝션 대상이 하나면 타입을 명확하게 지정할 수 있음(List&lt;String&gt;) 프로젝션 대상이 둘 이상이면 튜플이나 DTO로 조회  튜플 조회 프로젝션 대상이 둘 이상일 때 사용
+com.querydsl.core.Tuple
+List&lt;Tuple&gt; result = queryFactory .select(member.username, member.age) .from(member) .fetch(); for (Tuple tuple : result) { String username = tuple.get(member.username); Integer age = tuple.get(member.age); System.out.println(&#34;username = &#34; &#43; username); System.out.println(&#34;age = &#34; &#43; age); }  Tuple 은 리포지토리 계층안에서 쓰는 정도는 괜찮지만 그 밖의 계층에서는 DTO로 변환해서 쓰는 것이 좋다. → Tuple 도 결국 Querydsl에 종속적이기 떄문  프로젝션과 결과 반환 - DTO 조회 순수 JPA에서 DTO 조회 위에서 select 절에서 대상을 지정(프로젝션)해서 가져오고 싶을때 그 대상이 둘 이상이면 Tuple로 가져왔었다. 하지만, 그 외 계층으로 가져갈 때는 DTO로 가져가는게 좋다. 우선 순수 JPA를 이용해서 DTO로 조회하는 코드를 작성해보자.
+MemberDto
+@Data @NoArgsConstructor public class MemberDto { private String username; private int age; public MemberDto(String username, int age) { this.username = username; this.age = age; } } 
+순수 JPA에서 DTO 조회 코드
+@Test public void findDtoByJPQL() { List&lt;MemberDto&gt; result = em.createQuery(&#34;select new study.querydsl.dto.MemberDto(m.username, m.age) from Member m&#34;, MemberDto.class) .getResultList(); for (MemberDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } }  순수 JPA에서 DTO를 조회할 때는 new 명령어를 사용해야 함 DTO의 package이름을 다 적어줘야해서 지저분함 생성자 방식만 지원함  QueryDSL 빈 생성 (Bean Population) 결과를 DTO반환할 떄 사용하며 3가지 방법이 존재한다.
+ 프로퍼티 접근 필드 직접 접근 생성자 사용  프로퍼티 접근 - Setter
+@Test public void findDtoBySetter() { List&lt;MemberDto&gt; result = queryFactory .select(Projections.bean(MemberDto.class, member.username, member.age)) .from(member) .fetch(); for (MemberDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } }  Projections.bean(주입대상클래스, 프로퍼티1, 프로퍼티2&hellip;)방식으로 프로퍼티에 값을 주입  필드 직접 접근
+@Test public void findDtoByField() { List&lt;MemberDto&gt; result = queryFactory .select(Projections.fields(MemberDto.class, member.username, member.age)) .from(member) .fetch(); for (MemberDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } }  Getter, Setter가 없어도 필드에 바로 값을 주입 Projections.fields(주입대상클래스, 필드1, 필드2&hellip;)  필드 직접 접근 - 별칭이 다를 때
+@Test public void findUserDtoByField() throws Exception { QMember memberSub = new QMember(&#34;memberSub&#34;); List&lt;UserDto&gt; result = queryFactory .select(Projections.fields(UserDto.class, member.username.as(&#34;name&#34;), ExpressionUtils.as(JPAExpressions .select(memberSub.age.max()) .from(memberSub), &#34;age&#34;) )) .from(member) .fetch(); for (UserDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } }  필드나 프로퍼티명 접근 생성방식에서 이름이 다를 때 해결방안을 as(name)을 이용해서 해결한다. ExpressionUtils.as(source,alias) : 필드나 서브 쿼리에 별칭 적용 username.as(&quot;memberName&quot;) : 필드에 별칭 적용  생성자 적용
+@Test public void findDtoByConstructor() { List&lt;MemberDto&gt; result = queryFactory .select(Projections.constructor(MemberDto.class, member.username, member.age)) .from(member) .fetch(); for (MemberDto memberDto : result) { System.out.println(&#34;memberDto = &#34; &#43; memberDto); } } 
+프로젝션과 결과 반환 - @QueryProjection 프로젝션결과를 반환할 DTO에 @QueryProjection 을 생성자에 붙혀준 뒤 gradle → tasks → other → compileQuerydsl 을 통해 DTO도 Q타입으로 생성해 준다.
+생성자 &#43; @QueryProjection @Data @NoArgsConstructor public class MemberDto { private String username; private int age; @QueryProjection public MemberDto(String username, int age) { this.username = username; this.age = age; } }  ./gradlew compileQuerydsl QMemberDto 생성 확인  @QueryProjection 활용 @Test public void findDtoByQueryProjection() throws Exception{ List&lt;MemberDto&gt; result = queryFactory ."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/querydsl-intermediate-grammer/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/querydsl-basic-grammer/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "QueryDSL 중급 문법",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/querydsl-intermediate-grammer\/"
+        },"genre": "posts","keywords": "QueryDSL","wordcount":  1003 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/querydsl-intermediate-grammer\/","datePublished": "2021-12-31T13:00:00+00:00","dateModified": "2021-12-31T13:00:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">QueryDSL 중급 문법</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/querydsl/"><i class="far fa-folder fa-fw"></i>QueryDSL</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-31">2021-12-31</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;1003 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;5 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/querydsl.png"
+        data-srcset="/images/JPA/querydsl.png, /images/JPA/querydsl.png 1.5x, /images/JPA/querydsl.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/querydsl.png"
+        title="/images/JPA/querydsl.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#프로젝션과-결과-반환---기본">프로젝션과 결과 반환 - 기본</a>
+      <ul>
+        <li><a href="#튜플-조회">튜플 조회</a></li>
+      </ul>
+    </li>
+    <li><a href="#프로젝션과-결과-반환---dto-조회">프로젝션과 결과 반환 - DTO 조회</a>
+      <ul>
+        <li><a href="#순수-jpa에서-dto-조회">순수 JPA에서 DTO 조회</a></li>
+        <li><a href="#querydsl-빈-생성-bean-population">QueryDSL 빈 생성 (Bean Population)</a></li>
+      </ul>
+    </li>
+    <li><a href="#프로젝션과-결과-반환---queryprojection">프로젝션과 결과 반환 - @QueryProjection</a>
+      <ul>
+        <li><a href="#생성자--queryprojection">생성자 + @QueryProjection</a></li>
+        <li><a href="#queryprojection-활용">@QueryProjection 활용</a></li>
+      </ul>
+    </li>
+    <li><a href="#동적-쿼리---booleanbuilder-사용">동적 쿼리 - BooleanBuilder 사용</a>
+      <ul>
+        <li><a href="#booleanbuilder-사용">BooleanBuilder 사용</a></li>
+        <li><a href="#동적-쿼리---where-다중-파라미터-사용">동적 쿼리 - Where 다중 파라미터 사용</a></li>
+        <li><a href="#메서드들을-조합해서-사용-할-수도-있다">메서드들을 조합해서 사용 할 수도 있다.</a></li>
+      </ul>
+    </li>
+    <li><a href="#수정-삭제-벌크-연산">수정, 삭제 벌크 연산</a>
+      <ul>
+        <li><a href="#쿼리-한번으로-대량-데이터-수정">쿼리 한번으로 대량 데이터 수정</a></li>
+        <li><a href="#기존-숫자에-1-더하기">기존 숫자에 1 더하기</a></li>
+        <li><a href="#쿼리-한번으로-대량-데이터-삭제">쿼리 한번으로 대량 데이터 삭제</a></li>
+      </ul>
+    </li>
+    <li><a href="#sql-function-호출하기">SQL function 호출하기</a>
+      <ul>
+        <li><a href="#replace-function-사용해보기">Replace function 사용해보기</a></li>
+        <li><a href="#lower-function-사용해보기">lower function 사용해보기</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="프로젝션과-결과-반환---기본">프로젝션과 결과 반환 - 기본</h2>
+<p>프로젝션 : select 대상 지정</p>
+<br>
+<p><strong>프로젝션 대상이 하나</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+	      <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">)</span>
+	      <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+	      <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+</code></pre></div><ul>
+<li>프로젝션 대상이 하나면 타입을 명확하게 지정할 수 있음(<code>List&lt;String&gt;</code>)</li>
+<li>프로젝션 대상이 둘 이상이면 튜플이나 DTO로 조회</li>
+</ul>
+<br>
+<br>
+<h3 id="튜플-조회">튜플 조회</h3>
+<p><strong>프로젝션 대상이 둘 이상일 때 사용</strong></p>
+<p><code>com.querydsl.core.Tuple</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">List</span><span class="o">&lt;</span><span class="n">Tuple</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+        <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span> <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+
+<span class="k">for</span> <span class="o">(</span><span class="n">Tuple</span> <span class="n">tuple</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">String</span> <span class="n">username</span> <span class="o">=</span> <span class="n">tuple</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">);</span>
+    <span class="n">Integer</span> <span class="n">age</span> <span class="o">=</span> <span class="n">tuple</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">);</span>
+    <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;username = &#34;</span> <span class="o">+</span> <span class="n">username</span><span class="o">);</span>
+    <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;age = &#34;</span> <span class="o">+</span> <span class="n">age</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li><code>Tuple</code> 은 리포지토리 계층안에서 쓰는 정도는 괜찮지만 그 밖의 계층에서는 DTO로 변환해서 쓰는 것이 좋다.
+→ <code>Tuple</code> 도 결국 Querydsl에 종속적이기 떄문</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="프로젝션과-결과-반환---dto-조회">프로젝션과 결과 반환 - DTO 조회</h2>
+<h3 id="순수-jpa에서-dto-조회">순수 JPA에서 DTO 조회</h3>
+<p>위에서 select 절에서 대상을 지정(프로젝션)해서 가져오고 싶을때 그 대상이 둘 이상이면 Tuple로 가져왔었다. <br>
+하지만, 그 외 계층으로 가져갈 때는 DTO로 가져가는게 좋다.  우선 순수 JPA를 이용해서 DTO로 조회하는 코드를 작성해보자.</p>
+<br>
+<br>
+<p><strong>MemberDto</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Data</span>
+<span class="nd">@NoArgsConstructor</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberDto</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">username</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="kt">int</span> <span class="n">age</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nf">MemberDto</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">,</span> <span class="kt">int</span> <span class="n">age</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">username</span> <span class="o">=</span> <span class="n">username</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">age</span> <span class="o">=</span> <span class="n">age</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>순수 JPA에서 DTO 조회 코드</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">findDtoByJPQL</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select new study.querydsl.dto.MemberDto(m.username, m.age) from Member m&#34;</span><span class="o">,</span> <span class="n">MemberDto</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">MemberDto</span> <span class="n">memberDto</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;memberDto = &#34;</span> <span class="o">+</span> <span class="n">memberDto</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>순수 JPA에서 DTO를 조회할 때는 new 명령어를 사용해야 함</li>
+<li>DTO의 package이름을 다 적어줘야해서 지저분함</li>
+<li>생성자 방식만 지원함</li>
+</ul>
+<br>
+<br>
+<h3 id="querydsl-빈-생성-bean-population">QueryDSL 빈 생성 (Bean Population)</h3>
+<p>결과를 DTO반환할 떄 사용하며 3가지 방법이 존재한다.</p>
+<ul>
+<li>프로퍼티 접근</li>
+<li>필드 직접 접근</li>
+<li>생성자 사용</li>
+</ul>
+<br>
+<br>
+<p><strong>프로퍼티 접근 - Setter</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">findDtoBySetter</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">Projections</span><span class="o">.</span><span class="na">bean</span><span class="o">(</span><span class="n">MemberDto</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">MemberDto</span> <span class="n">memberDto</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;memberDto = &#34;</span> <span class="o">+</span> <span class="n">memberDto</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>Projections.bean(주입대상클래스, 프로퍼티1, 프로퍼티2&hellip;)방식으로 프로퍼티에 값을 주입</li>
+</ul>
+<br>
+<br>
+<p><strong>필드 직접 접근</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">findDtoByField</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">Projections</span><span class="o">.</span><span class="na">fields</span><span class="o">(</span><span class="n">MemberDto</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">MemberDto</span> <span class="n">memberDto</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;memberDto = &#34;</span> <span class="o">+</span> <span class="n">memberDto</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>Getter, Setter가 없어도 필드에 바로 값을 주입</li>
+<li>Projections.fields(주입대상클래스, 필드1, 필드2&hellip;)</li>
+</ul>
+<br>
+<br>
+<p>필드 직접 접근 - <strong>별칭이 다를 때</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">findUserDtoByField</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span> <span class="o">{</span>
+    <span class="n">QMember</span> <span class="n">memberSub</span> <span class="o">=</span> <span class="k">new</span> <span class="n">QMember</span><span class="o">(</span><span class="s">&#34;memberSub&#34;</span><span class="o">);</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">UserDto</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">Projections</span><span class="o">.</span><span class="na">fields</span><span class="o">(</span><span class="n">UserDto</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;name&#34;</span><span class="o">),</span>
+                    <span class="n">ExpressionUtils</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="n">JPAExpressions</span>
+                            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">memberSub</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">max</span><span class="o">())</span>
+                            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">memberSub</span><span class="o">),</span> <span class="s">&#34;age&#34;</span><span class="o">)</span>
+            <span class="o">))</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">UserDto</span> <span class="n">memberDto</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;memberDto = &#34;</span> <span class="o">+</span> <span class="n">memberDto</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>필드나 프로퍼티명 접근 생성방식에서 이름이 다를 때 해결방안을 as(<code>name</code>)을 이용해서 해결한다.</li>
+<li><code>ExpressionUtils.as(source,alias)</code> : 필드나 서브 쿼리에 별칭 적용</li>
+<li><code>username.as(&quot;memberName&quot;)</code> : 필드에 별칭 적용</li>
+</ul>
+<br>
+<br>
+<p><strong>생성자 적용</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">findDtoByConstructor</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">Projections</span><span class="o">.</span><span class="na">constructor</span><span class="o">(</span><span class="n">MemberDto</span><span class="o">.</span><span class="na">class</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">MemberDto</span> <span class="n">memberDto</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;memberDto = &#34;</span> <span class="o">+</span> <span class="n">memberDto</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<br>
+<h2 id="프로젝션과-결과-반환---queryprojection">프로젝션과 결과 반환 - @QueryProjection</h2>
+<p>프로젝션결과를 반환할 DTO에 <code>@QueryProjection</code> 을 생성자에 붙혀준 뒤 <br> <code>gradle</code> → <code>tasks</code> → <code>other</code> → <code>compileQuerydsl</code> 을 통해 DTO도 Q타입으로 생성해 준다.</p>
+<br>
+<br>
+<h3 id="생성자--queryprojection">생성자 + @QueryProjection</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Data</span>
+<span class="nd">@NoArgsConstructor</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberDto</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="n">String</span> <span class="n">username</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="kt">int</span> <span class="n">age</span><span class="o">;</span>
+
+    <span class="nd">@QueryProjection</span>
+    <span class="kd">public</span> <span class="nf">MemberDto</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">,</span> <span class="kt">int</span> <span class="n">age</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">username</span> <span class="o">=</span> <span class="n">username</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">age</span> <span class="o">=</span> <span class="n">age</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li><code>./gradlew compileQuerydsl</code></li>
+<li><code>QMemberDto</code> 생성 확인</li>
+</ul>
+<br>
+<br>
+<h3 id="queryprojection-활용">@QueryProjection 활용</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">findDtoByQueryProjection</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span><span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberDto</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="k">new</span> <span class="n">QMemberDto</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span> <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">MemberDto</span> <span class="n">memberDto</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;memberDto = &#34;</span> <span class="o">+</span> <span class="n">memberDto</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><p>이 방법은 컴파일러로 타입을 체크할 수 있으므로 가장 안전한 방법이다. <br> 다만 DTO에 QueryDSL 어노테이션을 유지해야 하는 점과 DTO까지 Q 파일을 생성해야 하는 단점이 있다.</p>
+<br>
+<br>
+<p><strong>distinct 사용</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">).</span><span class="na">distinct</span><span class="o">()</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+</code></pre></div><br>
+<p><strong>참고</strong>: distinct는 JPQL의 distinct와 같다.</p>
+<br>
+<br>
+<br>
+<h2 id="동적-쿼리---booleanbuilder-사용">동적 쿼리 - BooleanBuilder 사용</h2>
+<p>예전 순수 JPA에서 동적 쿼리를 해결하는 방법으로 3가지가 있다고 했다.</p>
+<ol>
+<li>문자열 조합 → 조건에 따라 문자열을 결합하면 query문을 만들고 parameter를 세팅해주는 방법</li>
+<li>JPA Criteria → JPA 표준 스펙에서 제공하는 기능.</li>
+<li>QueryDSL → 오픈소스를 통해 제공되는 기능으로 쿼리 구현을 method로 한다.</li>
+</ol>
+<br>
+<br>
+<p>여기서 QueryDSL을 사용해서 동적 쿼리를 해결하는 방식은 자세히 들어가면 두 가지 방식이 있다.</p>
+<ol>
+<li>BooleanBuilder</li>
+<li>Where 다중 파라미터 사용</li>
+</ol>
+<br>
+<br>
+<h3 id="booleanbuilder-사용">BooleanBuilder 사용</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">dynamicQuery_BooleanBuilder</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">String</span> <span class="n">usernameParam</span> <span class="o">=</span> <span class="s">&#34;member1&#34;</span><span class="o">;</span>
+    <span class="n">Integer</span> <span class="n">ageParam</span> <span class="o">=</span> <span class="n">10</span><span class="o">;</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">searchMember1</span><span class="o">(</span><span class="n">usernameParam</span><span class="o">,</span> <span class="n">ageParam</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result</span><span class="o">.</span><span class="na">size</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">1</span><span class="o">);</span>
+<span class="o">}</span>
+
+<span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">searchMember1</span><span class="o">(</span><span class="n">String</span> <span class="n">usernameCond</span><span class="o">,</span> <span class="n">Integer</span> <span class="n">ageCond</span><span class="o">)</span> <span class="o">{</span>
+
+    <span class="n">BooleanBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="k">new</span> <span class="n">BooleanBuilder</span><span class="o">();</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">usernameCond</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">builder</span><span class="o">.</span><span class="na">and</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="n">usernameCond</span><span class="o">));</span>
+    <span class="o">}</span>
+
+    <span class="k">if</span> <span class="o">(</span><span class="n">ageCond</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">builder</span><span class="o">.</span><span class="na">and</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="n">ageCond</span><span class="o">));</span>
+    <span class="o">}</span>
+
+    <span class="k">return</span> <span class="n">queryFactory</span>
+                <span class="o">.</span><span class="na">selectFrom</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">builder</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li><code>if</code> 문을 통해 usernameCond.ageCond를 builder.and() 메서드를 통해 조건을 넣어주고 있다.</li>
+</ul>
+<br>
+<br>
+<h3 id="동적-쿼리---where-다중-파라미터-사용">동적 쿼리 - Where 다중 파라미터 사용</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">dynamicQuery_whereParam</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span><span class="o">{</span>
+    <span class="n">String</span> <span class="n">usernameParam</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="n">Integer</span> <span class="n">ageParam</span> <span class="o">=</span> <span class="kc">null</span><span class="o">;</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">searchMember2</span><span class="o">(</span><span class="n">usernameParam</span><span class="o">,</span> <span class="n">ageParam</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result</span><span class="o">.</span><span class="na">size</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">1</span><span class="o">);</span>
+<span class="o">}</span>
+
+<span class="kd">private</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">searchMember2</span><span class="o">(</span><span class="n">String</span> <span class="n">usernameCond</span><span class="o">,</span> <span class="n">Integer</span> <span class="n">ageCond</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">selectFrom</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">usernameEq</span><span class="o">(</span><span class="n">usernameCond</span><span class="o">),</span> <span class="n">ageEq</span><span class="o">(</span><span class="n">ageCond</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+<span class="o">}</span>
+
+<span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">usernameEq</span><span class="o">(</span><span class="n">String</span> <span class="n">usernameCond</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">usernameCond</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="n">usernameCond</span><span class="o">):</span><span class="kc">null</span><span class="o">;</span>
+<span class="o">}</span>
+
+<span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">ageEq</span><span class="o">(</span><span class="n">Integer</span> <span class="n">ageCond</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">ageCond</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="n">ageCond</span><span class="o">):</span><span class="kc">null</span><span class="o">;</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li><code>where</code> 조건에 <code>null</code> 값은 무시된다.</li>
+<li><code>usernameEq()</code> 과 같은 메서드는 다른 쿼리에서 재활용 할 수도 있다.</li>
+<li>쿼리 자체의 가독성이 높아진다.</li>
+</ul>
+<br>
+<br>
+<h3 id="메서드들을-조합해서-사용-할-수도-있다">메서드들을 조합해서 사용 할 수도 있다.</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">allEq</span><span class="o">(</span><span class="n">String</span> <span class="n">usernameCond</span><span class="o">,</span> <span class="n">Integer</span> <span class="n">ageCond</span><span class="o">)</span> <span class="o">{</span>
+    <span class="k">return</span> <span class="n">usernameEq</span><span class="o">(</span><span class="n">usernameCond</span><span class="o">).</span><span class="na">and</span><span class="o">(</span><span class="n">ageEq</span><span class="o">(</span><span class="n">ageCond</span><span class="o">));</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li><code>method chaining</code> 이 있다.</li>
+<li><code>null</code> 체크는 주의해서 처리해야 함</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="수정-삭제-벌크-연산">수정, 삭제 벌크 연산</h2>
+<h3 id="쿼리-한번으로-대량-데이터-수정">쿼리 한번으로 대량 데이터 수정</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">bulkUpdate</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span><span class="o">{</span>
+    <span class="c1">//member1(10), memberr2(20) -&gt; 비회원
+</span><span class="c1"></span>    <span class="c1">//member3(30), member4(40) -&gt; 그대로
+</span><span class="c1"></span>    <span class="kt">long</span> <span class="n">count</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">update</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">set</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span> <span class="s">&#34;비회원&#34;</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">lt</span><span class="o">(</span><span class="n">28</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">execute</span><span class="o">();</span>
+
+    <span class="n">em</span><span class="o">.</span><span class="na">flush</span><span class="o">();</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">clear</span><span class="o">();</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">selectFrom</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+    <span class="k">for</span> <span class="o">(</span><span class="n">Member</span> <span class="n">member1</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;member1 = &#34;</span> <span class="o">+</span> <span class="n">member1</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h3 id="기존-숫자에-1-더하기">기존 숫자에 1 더하기</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kt">long</span> <span class="n">count</span> <span class="o">=</span> <span class="n">queryFactory</span>
+	      <span class="o">.</span><span class="na">update</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+	      <span class="o">.</span><span class="na">set</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span> <span class="s">&#34;비회원&#34;</span><span class="o">)</span>
+	      <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">lt</span><span class="o">(</span><span class="n">28</span><span class="o">))</span>
+	      <span class="o">.</span><span class="na">execute</span><span class="o">();</span>
+</code></pre></div><ul>
+<li>곱하기를 하려면 <code>member.age.multiply(x)</code> 를 사용.</li>
+</ul>
+<br>
+<br>
+<h3 id="쿼리-한번으로-대량-데이터-삭제">쿼리 한번으로 대량 데이터 삭제</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kt">long</span> <span class="n">count</span> <span class="o">=</span> <span class="n">queryFactory</span>
+        <span class="o">.</span><span class="na">delete</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">gt</span><span class="o">(</span><span class="n">18</span><span class="o">))</span>
+        <span class="o">.</span><span class="na">execute</span><span class="o">();</span>
+</code></pre></div><br>
+<p><strong>주의</strong> <br> JPQL 배치와 마찬가지로, 영속성 컨텍스트에 있는 엔티티를 무시하고 실행되기 때문에 <br>배치 쿼리를 실행하고 나면 영속성 컨텍스트를 초기화 하는 것이 안전하다.</p>
+<br>
+<br>
+<br>
+<h2 id="sql-function-호출하기">SQL function 호출하기</h2>
+<p>SQL function은 JPA와 같이 Dialect에 등록된 내용만 호출할 수 있다.</p>
+<br>
+<h3 id="replace-function-사용해보기">Replace function 사용해보기</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">sqlFunction</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span><span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span>
+                    <span class="n">Expressions</span><span class="o">.</span><span class="na">stringTemplate</span><span class="o">(</span><span class="s">&#34;function(&#39;replace&#39;, {0},{1},{2})&#34;</span><span class="o">,</span>
+                            <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span> <span class="s">&#34;member&#34;</span><span class="o">,</span> <span class="s">&#34;M&#34;</span><span class="o">))</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+    <span class="k">for</span> <span class="o">(</span><span class="n">String</span> <span class="n">s</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;s = &#34;</span> <span class="o">+</span> <span class="n">s</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+<span class="cm">/* 실행 결과 */</span>
+<span class="cm">/*
+</span><span class="cm">    M1
+</span><span class="cm">    M2
+</span><span class="cm">    M3
+</span><span class="cm">    M4
+</span><span class="cm">*/</span>
+</code></pre></div><ul>
+<li>MemberX → MX가 된 걸 확인할 수 있다.</li>
+</ul>
+<br>
+<br>
+<h3 id="lower-function-사용해보기">lower function 사용해보기</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">sqlFunction2</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span><span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span>
+                <span class="n">Expressions</span><span class="o">.</span><span class="na">stringTemplate</span><span class="o">(</span><span class="s">&#34;function(&#39;lower&#39;, {0})&#34;</span><span class="o">,</span> <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">)))</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+
+    <span class="k">for</span> <span class="o">(</span><span class="n">String</span> <span class="n">s</span> <span class="o">:</span> <span class="n">result</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;s = &#34;</span> <span class="o">+</span> <span class="n">s</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+<span class="cm">/* 실행 결과 */</span>
+<span class="cm">/*
+</span><span class="cm">    member1
+</span><span class="cm">    member2
+</span><span class="cm">    member3
+</span><span class="cm">    member4
+</span><span class="cm">*/</span>
+</code></pre></div><ul>
+<li>
+<p>lower같은 ansi 표준 함수들은 querydsl이 대부분 내장하고 있기에 <code>.lower()</code> 로 처리해도 된다.</p>
+<p>→ <code>.where(member.username.eq(member.username.lower()))</code></p>
+</li>
+</ul>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-31</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/querydsl-intermediate-grammer/" data-title="QueryDSL 중급 문법" data-hashtags="QueryDSL"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/querydsl-intermediate-grammer/" data-hashtag="QueryDSL"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/querydsl-intermediate-grammer/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/querydsl-intermediate-grammer/" data-title="QueryDSL 중급 문법" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/querydsl/">QueryDSL</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/querydsl-basic-grammer/" class="prev" rel="prev" title="QueryDSL 기본 문법"><i class="fas fa-angle-left fa-fw"></i>QueryDSL 기본 문법</a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>
