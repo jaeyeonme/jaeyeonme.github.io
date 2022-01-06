@@ -3,5 +3,19 @@
         <title>Tags - Tag - 📚 | Dev Blog</title>
         <link>https://jaeyeonme.github.io/tags/</link>
         <description>Tags - Tag - 📚 | Dev Blog</description>
-        <generator>Hugo -- gohugo.io</generator><language>en</language><atom:link href="https://jaeyeonme.github.io/tags/" rel="self" type="application/rss+xml" /></channel>
+        <generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Wed, 29 Dec 2021 12:00:00 &#43;0000</lastBuildDate><atom:link href="https://jaeyeonme.github.io/tags/" rel="self" type="application/rss+xml" /><item>
+    <title>Hibernate</title>
+    <link>https://jaeyeonme.github.io/tags/hibernate/</link>
+    <pubDate>Wed, 29 Dec 2021 12:00:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/tags/hibernate/</guid>
+    <description><![CDATA[]]></description>
+</item><item>
+    <title>JPA</title>
+    <link>https://jaeyeonme.github.io/tags/jpa/</link>
+    <pubDate>Wed, 29 Dec 2021 12:00:00 &#43;0000</pubDate>
+    <author>Author</author>
+    <guid>https://jaeyeonme.github.io/tags/jpa/</guid>
+    <description><![CDATA[]]></description>
+</item></channel>
 </rss>

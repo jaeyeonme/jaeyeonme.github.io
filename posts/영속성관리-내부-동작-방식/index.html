@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>영속성관리 - 내부 동작 방식 - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="영속성관리 - 내부 동작 방식" />
+<meta property="og:description" content="1. 영속성 컨텍스트  웹 어플리케이션이 구동하는 시점에 EntityManagerFactory 를 생성하여 가지고 있으며, 사용자의 요청이 있을 때 EntityManager를 생성하여 커넥션 풀(Connection Pool)을 사용해서 DB를 핸들링 하게 된다.  영속성 컨텍스트란?   엔티티를 영구 저장하는 환경
+  EntityManager.persist(entity);
+→ DB에 저장한다기 보다는 영속성 컨텍스트를 통해 엔티티를 영속화 한다는 의미
+ 영속성 컨텍스트에 엔티티를 저장한다는 말    영속성 컨텍스트는 논리적인 개념
+  눈에 보이지 않는다.
+  엔티티 매니저를 통해서 영속성 컨텍스트에 접근
+ J2SE 환경    엔티티의 생명 주기  비영속(new / transient): 영속성 컨텍스트와 전혀 관계가 없는 새로운 상태 영속(managed): 영속성 컨텍스트에 관리되는 상태 준영속(detached): 영속성 컨텍스트에 저장되었다가 분리된 상태 삭제(removed): 삭제된 상태  비영속 : JPA에 관계없이 객체 생성만 된 상태
+// 객체를 생성한 상태(비영속) Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); 
+영속 // 객체를 생성한 상태(비영속) Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); EntityManager em = emf.createEntityManager(); em.getTransaction().begin(); // 객체를 저장한 상태(영속) em.persist(member); 
+준영속, 삭제 // 회원 엔티티를 영속성 컨텍스트에서 분리, 준영속 상태 em.detach(member); // 객체를 삭제한 상태(삭제) em.remove(member);  준영속: 영속성 컨텍스트에서 삭제하는 것 삭제는 실제로 DB에서 해당 ROW를 삭제하는 것  2. 영속성 컨텍스트의 이점 1. 1차 캐시 Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); //1차 캐시에 저장됨 em.persist(member); //1차 캐시에서 조회 Member findMember = em.find(Member.class, &#34;member1&#34;);  조회 시 영속 컨텍스트안에서 1차 캐시를 조회 후 해당 엔티티가 있을 경우 캐시를 조회 해 온다. 조회 시 영속 컨텍스트 안에서 1차 캐시를 조회 후 해당 엔티티가 없을 경우 데이터베이스에서 조회해 온다. 데이터베이스 트랜잭션 내부에서 만들고 종료되기 때문에 하나의 비즈니스 로직이 종료될 경우 1차캐시는 다 사라지기 때문에 큰 도움이 되지 않는다. (비즈니스 로직이 복잡해 질 수록 효과는 커진다.)  2. 동일성(identity) 보장 Member findMember = em.find(Member.class, 100L); Member findMember2 = em.find(Member.class, 100L); System.out.println(findMember == findMember2); // true : 1차 캐시로 반복 가능한 읽기(REPEATABLE READ) 등급의 트랜잭션 격리 수준을 데이터베이스가 아닌 애플리케이션 차원에서 제공
+ 참고: 트랜잭션의 격리수준이 궁금하면 트랜잭션이 보장해야 하는 ACID를 기억하자.
+ 3. 엔티티 등록 - 트랜잭션을 지원하는 쓰지지연 Member member = new Member(150L, &#34;A&#34;); Member member2 = new Member(160L, &#34;B&#34;); em.persist(member); em.persist(member2); // 엔티티 등록은 아직 수행되지 않는다. (쓰지 지연)  System.out.println(&#34;=========&#34;); tx.commit(); // 에티티 등록은 이 떄 동시에 수행된다. 
+memberA와 memberrB는 둘 다 쓰기지연 SQL저장소에 저장되어있고 실제 DB에 적용은 안된 상태
+commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜서 DB에 적용한다.
+쓰기 지연을 사용하는 이유
+-&gt; 버퍼링 기능이 제공
+&lt;property name=&#34;hibernate.jdbc.batch_size&#34; value=&#34;10&#34;/&gt; -&gt; 10개씩 쌓일때마다 적용하게 하는 기능
+-&gt; 쿼리를 여러번 날리지 않고 최적화가 가능하다.
+4. 엔티티 수정 - 변경감지(Dirty Checking) transaction.begin(); //엔티티 조회 Member findMember = em.find(Member.class, &#34;memberA&#34;); //영속 엔티티 데이터 수정 findMember.setUsername(&#34;hi&#34;); findMember.setAge(10); transaction.commit(); → 1차 캐시안에는 @Id, Entity , 스냅샷 이 있다. 여기서 스냅샷 은 최초로 영속성 컨텍스트(1차캐시)에 들어오는순간 스냅샷을 찍어서 저장해둔다.
+→ JPA는 트랜잭션이 커밋(commit)되는 순간 엔티티와 스냅샷을 모두 비교한다.
+→ 변경된 것이 있을 경우 쓰기지연 SQL 저장소 에 업데이트 쿼리를 저장하고 수행하게 된다.
+5. 엔티티 삭제 //삭제 대상 엔티티 조회 Member member = em.find(Member.class, &#34;memberA&#34;); em.remove(member);//엔티티 삭제 
+3. 플러시(flush) : 영속성 컨텍스트의 변경을 데이터베이스에 반영(sync)
+  플러시 발생
+ 변경 감지 수정된 엔티티 쓰기지연 SQL 저장소에 등록 쓰기 지연 SQL저장소의 쿼리를 데이터베이스에 전송(등록, 수정, 삭제 쿼리)    영속성 컨텍스트를 플러시 하는 방법" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-12-29T12:00:00+00:00" />
+<meta property="article:modified_time" content="2021-12-29T12:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="영속성관리 - 내부 동작 방식"/>
+<meta name="twitter:description" content="1. 영속성 컨텍스트  웹 어플리케이션이 구동하는 시점에 EntityManagerFactory 를 생성하여 가지고 있으며, 사용자의 요청이 있을 때 EntityManager를 생성하여 커넥션 풀(Connection Pool)을 사용해서 DB를 핸들링 하게 된다.  영속성 컨텍스트란?   엔티티를 영구 저장하는 환경
+  EntityManager.persist(entity);
+→ DB에 저장한다기 보다는 영속성 컨텍스트를 통해 엔티티를 영속화 한다는 의미
+ 영속성 컨텍스트에 엔티티를 저장한다는 말    영속성 컨텍스트는 논리적인 개념
+  눈에 보이지 않는다.
+  엔티티 매니저를 통해서 영속성 컨텍스트에 접근
+ J2SE 환경    엔티티의 생명 주기  비영속(new / transient): 영속성 컨텍스트와 전혀 관계가 없는 새로운 상태 영속(managed): 영속성 컨텍스트에 관리되는 상태 준영속(detached): 영속성 컨텍스트에 저장되었다가 분리된 상태 삭제(removed): 삭제된 상태  비영속 : JPA에 관계없이 객체 생성만 된 상태
+// 객체를 생성한 상태(비영속) Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); 
+영속 // 객체를 생성한 상태(비영속) Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); EntityManager em = emf.createEntityManager(); em.getTransaction().begin(); // 객체를 저장한 상태(영속) em.persist(member); 
+준영속, 삭제 // 회원 엔티티를 영속성 컨텍스트에서 분리, 준영속 상태 em.detach(member); // 객체를 삭제한 상태(삭제) em.remove(member);  준영속: 영속성 컨텍스트에서 삭제하는 것 삭제는 실제로 DB에서 해당 ROW를 삭제하는 것  2. 영속성 컨텍스트의 이점 1. 1차 캐시 Member member = new Member(); member.setId(&#34;member1&#34;); member.setUsername(&#34;회원1&#34;); //1차 캐시에 저장됨 em.persist(member); //1차 캐시에서 조회 Member findMember = em.find(Member.class, &#34;member1&#34;);  조회 시 영속 컨텍스트안에서 1차 캐시를 조회 후 해당 엔티티가 있을 경우 캐시를 조회 해 온다. 조회 시 영속 컨텍스트 안에서 1차 캐시를 조회 후 해당 엔티티가 없을 경우 데이터베이스에서 조회해 온다. 데이터베이스 트랜잭션 내부에서 만들고 종료되기 때문에 하나의 비즈니스 로직이 종료될 경우 1차캐시는 다 사라지기 때문에 큰 도움이 되지 않는다. (비즈니스 로직이 복잡해 질 수록 효과는 커진다.)  2. 동일성(identity) 보장 Member findMember = em.find(Member.class, 100L); Member findMember2 = em.find(Member.class, 100L); System.out.println(findMember == findMember2); // true : 1차 캐시로 반복 가능한 읽기(REPEATABLE READ) 등급의 트랜잭션 격리 수준을 데이터베이스가 아닌 애플리케이션 차원에서 제공
+ 참고: 트랜잭션의 격리수준이 궁금하면 트랜잭션이 보장해야 하는 ACID를 기억하자.
+ 3. 엔티티 등록 - 트랜잭션을 지원하는 쓰지지연 Member member = new Member(150L, &#34;A&#34;); Member member2 = new Member(160L, &#34;B&#34;); em.persist(member); em.persist(member2); // 엔티티 등록은 아직 수행되지 않는다. (쓰지 지연)  System.out.println(&#34;=========&#34;); tx.commit(); // 에티티 등록은 이 떄 동시에 수행된다. 
+memberA와 memberrB는 둘 다 쓰기지연 SQL저장소에 저장되어있고 실제 DB에 적용은 안된 상태
+commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜서 DB에 적용한다.
+쓰기 지연을 사용하는 이유
+-&gt; 버퍼링 기능이 제공
+&lt;property name=&#34;hibernate.jdbc.batch_size&#34; value=&#34;10&#34;/&gt; -&gt; 10개씩 쌓일때마다 적용하게 하는 기능
+-&gt; 쿼리를 여러번 날리지 않고 최적화가 가능하다.
+4. 엔티티 수정 - 변경감지(Dirty Checking) transaction.begin(); //엔티티 조회 Member findMember = em.find(Member.class, &#34;memberA&#34;); //영속 엔티티 데이터 수정 findMember.setUsername(&#34;hi&#34;); findMember.setAge(10); transaction.commit(); → 1차 캐시안에는 @Id, Entity , 스냅샷 이 있다. 여기서 스냅샷 은 최초로 영속성 컨텍스트(1차캐시)에 들어오는순간 스냅샷을 찍어서 저장해둔다.
+→ JPA는 트랜잭션이 커밋(commit)되는 순간 엔티티와 스냅샷을 모두 비교한다.
+→ 변경된 것이 있을 경우 쓰기지연 SQL 저장소 에 업데이트 쿼리를 저장하고 수행하게 된다.
+5. 엔티티 삭제 //삭제 대상 엔티티 조회 Member member = em.find(Member.class, &#34;memberA&#34;); em.remove(member);//엔티티 삭제 
+3. 플러시(flush) : 영속성 컨텍스트의 변경을 데이터베이스에 반영(sync)
+  플러시 발생
+ 변경 감지 수정된 엔티티 쓰기지연 SQL 저장소에 등록 쓰기 지연 SQL저장소의 쿼리를 데이터베이스에 전송(등록, 수정, 삭제 쿼리)    영속성 컨텍스트를 플러시 하는 방법"/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "영속성관리 - 내부 동작 방식",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8\/"
+        },"genre": "posts","keywords": "JPA, Hibernate","wordcount":  727 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8\/","datePublished": "2021-12-29T12:00:00+00:00","dateModified": "2021-12-29T12:00:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">영속성관리 - 내부 동작 방식</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2021-12-29">2021-12-29</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;727 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;4 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-영속성-컨텍스트">1. 영속성 컨텍스트</a>
+      <ul>
+        <li><a href="#영속성-컨텍스트란">영속성 컨텍스트란?</a></li>
+        <li><a href="#엔티티의-생명-주기">엔티티의 생명 주기</a></li>
+        <li><a href="#비영속">비영속</a></li>
+        <li><a href="#영속">영속</a></li>
+        <li><a href="#준영속-삭제">준영속, 삭제</a></li>
+      </ul>
+    </li>
+    <li><a href="#2-영속성-컨텍스트의-이점">2. 영속성 컨텍스트의 이점</a>
+      <ul>
+        <li><a href="#1-1차-캐시">1. 1차 캐시</a></li>
+        <li><a href="#2-동일성identity-보장">2. 동일성(identity) 보장</a></li>
+        <li><a href="#3-엔티티-등록---트랜잭션을-지원하는-쓰지지연">3. 엔티티 등록 - 트랜잭션을 지원하는 쓰지지연</a></li>
+        <li><a href="#4-엔티티-수정---변경감지dirty-checking">4. 엔티티 수정 - 변경감지(Dirty Checking)</a></li>
+        <li><a href="#5-엔티티-삭제">5. 엔티티 삭제</a></li>
+      </ul>
+    </li>
+    <li><a href="#3-플러시flush">3. 플러시(flush)</a>
+      <ul>
+        <li><a href="#flush에-대한-오해">Flush에 대한 오해</a></li>
+      </ul>
+    </li>
+    <li><a href="#4-준영속-상태">4. 준영속 상태</a></li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-영속성-컨텍스트">1. 영속성 컨텍스트</h2>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2048.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2048.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2048.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2048.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2048.png"
+        title="image" /></p>
+<ul>
+<li>웹 어플리케이션이 구동하는 시점에 <code>EntityManagerFactory</code> 를 생성하여 가지고 있으며, 사용자의 요청이 있을 때 EntityManager를 생성하여 커넥션 풀(<code>Connection Pool</code>)을 사용해서 DB를 핸들링 하게 된다.</li>
+</ul>
+<br>
+<br>
+<h3 id="영속성-컨텍스트란">영속성 컨텍스트란?</h3>
+<ul>
+<li>
+<p>엔티티를 영구 저장하는 환경</p>
+</li>
+<li>
+<p>EntityManager.persist(entity);</p>
+<p>→ DB에 저장한다기 보다는 영속성 컨텍스트를 통해 엔티티를 영속화 한다는 의미</p>
+<ul>
+<li>영속성 컨텍스트에 엔티티를 저장한다는 말</li>
+</ul>
+</li>
+<li>
+<p>영속성 컨텍스트는 논리적인 개념</p>
+</li>
+<li>
+<p>눈에 보이지 않는다.</p>
+</li>
+<li>
+<p>엔티티 매니저를 통해서 영속성 컨텍스트에 접근</p>
+<ul>
+<li>J2SE 환경</li>
+</ul>
+</li>
+</ul>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2049.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2049.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2049.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2049.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2049.png"
+        title="image" /></p>
+<br>
+<br>
+<h3 id="엔티티의-생명-주기">엔티티의 생명 주기</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2050.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2050.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2050.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2050.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2050.png"
+        title="image" /></p>
+<ul>
+<li>비영속(new / transient): 영속성 컨텍스트와 전혀 관계가 없는 <strong>새로운</strong> 상태</li>
+<li>영속(managed): 영속성 컨텍스트에 <strong>관리</strong>되는 상태</li>
+<li>준영속(detached): 영속성 컨텍스트에 저장되었다가 <strong>분리</strong>된 상태</li>
+<li>삭제(removed): <strong>삭제</strong>된 상태</li>
+</ul>
+<br>
+<br>
+<h3 id="비영속">비영속</h3>
+<p>: JPA에 관계없이 객체 생성만 된 상태</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2051.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2051.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2051.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2051.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2051.png"
+        title="image" /></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">// 객체를 생성한 상태(비영속)
+</span><span class="c1"></span><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setId</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setUsername</span><span class="o">(</span><span class="s">&#34;회원1&#34;</span><span class="o">);</span>
+</code></pre></div><br>
+<br>
+<h3 id="영속">영속</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2052.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2052.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2052.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2052.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2052.png"
+        title="image" /></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">// 객체를 생성한 상태(비영속)
+</span><span class="c1"></span><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setId</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setUsername</span><span class="o">(</span><span class="s">&#34;회원1&#34;</span><span class="o">);</span>
+
+<span class="n">EntityManager</span> <span class="n">em</span> <span class="o">=</span> <span class="n">emf</span><span class="o">.</span><span class="na">createEntityManager</span><span class="o">();</span>
+<span class="n">em</span><span class="o">.</span><span class="na">getTransaction</span><span class="o">().</span><span class="na">begin</span><span class="o">();</span>
+
+<span class="c1">// 객체를 저장한 상태(영속)
+</span><span class="c1"></span><span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+</code></pre></div><br>
+<br>
+<h3 id="준영속-삭제">준영속, 삭제</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">// 회원 엔티티를 영속성 컨텍스트에서 분리, 준영속 상태
+</span><span class="c1"></span><span class="n">em</span><span class="o">.</span><span class="na">detach</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+<span class="c1">// 객체를 삭제한 상태(삭제)
+</span><span class="c1"></span><span class="n">em</span><span class="o">.</span><span class="na">remove</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+</code></pre></div><ul>
+<li>준영속: 영속성 컨텍스트에서 삭제하는 것</li>
+<li>삭제는 실제로 DB에서 해당 <strong>ROW를 삭제</strong>하는 것</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="2-영속성-컨텍스트의-이점">2. 영속성 컨텍스트의 이점</h2>
+<h3 id="1-1차-캐시">1. 1차 캐시</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">();</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setId</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setUsername</span><span class="o">(</span><span class="s">&#34;회원1&#34;</span><span class="o">);</span>
+
+<span class="c1">//1차 캐시에 저장됨
+</span><span class="c1"></span><span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+<span class="c1">//1차 캐시에서 조회
+</span><span class="c1"></span><span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="s">&#34;member1&#34;</span><span class="o">);</span>
+</code></pre></div><ul>
+<li>조회 시 영속 컨텍스트안에서 1차 캐시를 조회 후 해당 엔티티가 있을 경우 캐시를 조회 해 온다.</li>
+<li>조회 시 영속 컨텍스트 안에서 1차 캐시를 조회 후 해당 엔티티가 없을 경우 데이터베이스에서 조회해 온다.</li>
+<li>데이터베이스 트랜잭션 내부에서 만들고 종료되기 때문에 하나의 비즈니스 로직이 종료될 경우 1차캐시는 다 사라지기 때문에 큰 도움이 되지 않는다. (비즈니스 로직이 복잡해 질 수록 효과는 커진다.)</li>
+</ul>
+<br>
+<br>
+<h3 id="2-동일성identity-보장">2. 동일성(identity) 보장</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">100L</span><span class="o">);</span>
+<span class="n">Member</span> <span class="n">findMember2</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">100L</span><span class="o">);</span>
+
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="n">findMember</span> <span class="o">==</span> <span class="n">findMember2</span><span class="o">);</span> <span class="c1">// true
+</span></code></pre></div><p>: 1차 캐시로 반복 가능한 읽기(REPEATABLE READ) 등급의 트랜잭션 격리 수준을 데이터베이스가 아닌 애플리케이션 차원에서 제공</p>
+<blockquote>
+<p>참고: 트랜잭션의 격리수준이 궁금하면 트랜잭션이 보장해야 하는 ACID를 기억하자.</p>
+</blockquote>
+<br>
+<br>
+<h3 id="3-엔티티-등록---트랜잭션을-지원하는-쓰지지연">3. 엔티티 등록 - 트랜잭션을 지원하는 쓰지지연</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="n">150L</span><span class="o">,</span> <span class="s">&#34;A&#34;</span><span class="o">);</span>
+<span class="n">Member</span> <span class="n">member2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="n">160L</span><span class="o">,</span> <span class="s">&#34;B&#34;</span><span class="o">);</span>
+
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member2</span><span class="o">);</span> <span class="c1">// 엔티티 등록은 아직 수행되지 않는다. (쓰지 지연)
+</span><span class="c1"></span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;=========&#34;</span><span class="o">);</span>
+
+<span class="n">tx</span><span class="o">.</span><span class="na">commit</span><span class="o">();</span> <span class="c1">// 에티티 등록은 이 떄 동시에 수행된다.
+</span></code></pre></div><br>
+<p>memberA와 memberrB는 둘 다 쓰기지연 SQL저장소에 저장되어있고 실제 DB에 적용은 안된 상태</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2053.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2053.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2053.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2053.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2053.png"
+        title="image" /></p>
+<br>
+<p>commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜서 DB에 적용한다.</p>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2054.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2054.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2054.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2054.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2054.png"
+        title="image" /></p>
+<p><strong>쓰기 지연을 사용하는 이유</strong></p>
+<p>-&gt; 버퍼링 기능이 제공</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="o">&lt;</span><span class="n">property</span> <span class="n">name</span><span class="o">=</span><span class="s">&#34;hibernate.jdbc.batch_size&#34;</span> <span class="n">value</span><span class="o">=</span><span class="s">&#34;10&#34;</span><span class="o">/&gt;</span>
+</code></pre></div><p>-&gt; 10개씩 쌓일때마다 적용하게 하는 기능</p>
+<p>-&gt; 쿼리를 여러번 날리지 않고 최적화가 가능하다.</p>
+<br>
+<br>
+<h3 id="4-엔티티-수정---변경감지dirty-checking">4. 엔티티 수정 - 변경감지(Dirty Checking)</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">transaction</span><span class="o">.</span><span class="na">begin</span><span class="o">();</span>
+
+<span class="c1">//엔티티 조회
+</span><span class="c1"></span><span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="s">&#34;memberA&#34;</span><span class="o">);</span>
+
+<span class="c1">//영속 엔티티 데이터 수정
+</span><span class="c1"></span><span class="n">findMember</span><span class="o">.</span><span class="na">setUsername</span><span class="o">(</span><span class="s">&#34;hi&#34;</span><span class="o">);</span>
+<span class="n">findMember</span><span class="o">.</span><span class="na">setAge</span><span class="o">(</span><span class="n">10</span><span class="o">);</span>
+
+<span class="n">transaction</span><span class="o">.</span><span class="na">commit</span><span class="o">();</span>
+</code></pre></div><p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2055.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2055.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2055.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2055.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2055.png"
+        title="image" /></p>
+<p>→ 1차 캐시안에는 @Id, Entity , 스냅샷 이 있다. 여기서 스냅샷 은 최초로 영속성 컨텍스트(1차캐시)에 들어오는순간 스냅샷을 찍어서 저장해둔다.</p>
+<p>→ JPA는 트랜잭션이 커밋(commit)되는 순간 엔티티와 스냅샷을 모두 비교한다.</p>
+<p>→ 변경된 것이 있을 경우 쓰기지연 SQL 저장소 에 업데이트 쿼리를 저장하고 수행하게 된다.</p>
+<br>
+<br>
+<h3 id="5-엔티티-삭제">5. 엔티티 삭제</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">//삭제 대상 엔티티 조회
+</span><span class="c1"></span><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="s">&#34;memberA&#34;</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">remove</span><span class="o">(</span><span class="n">member</span><span class="o">);</span><span class="c1">//엔티티 삭제
+</span></code></pre></div><br>
+<br>
+<br>
+<h2 id="3-플러시flush">3. 플러시(flush)</h2>
+<p>: 영속성 컨텍스트의 변경을 데이터베이스에 반영(sync)</p>
+<ul>
+<li>
+<p>플러시 발생</p>
+<ol>
+<li>변경 감지</li>
+<li>수정된 엔티티 쓰기지연 SQL 저장소에 등록</li>
+<li>쓰기 지연 SQL저장소의 쿼리를 데이터베이스에 전송(등록, 수정, 삭제 쿼리)</li>
+</ol>
+</li>
+<li>
+<p>영속성 컨텍스트를 플러시 하는 방법</p>
+<ol>
+<li>
+<p>em.flush() : 직접 호출</p>
+</li>
+<li>
+<p>트랜잭션 커밋 : 플러시 자동 호출</p>
+</li>
+<li>
+<p>JPQL 쿼리 실행 : 플러시 자동 호출</p>
+<ul>
+<li>JPQL 쿼리 실행 시 자동으로 호출되는 이유</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">memberA</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">memberB</span><span class="o">);</span>
+<span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">memberC</span><span class="o">);</span>
+
+<span class="c1">//중간에 JPQL 실행
+</span><span class="c1"></span><span class="n">query</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">createQuery</span><span class="o">(</span><span class="s">&#34;select m from Member m &#34;</span><span class="o">,</span> <span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">)</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">members</span> <span class="o">=</span> <span class="n">query</span><span class="o">.</span><span class="na">getResultList</span><span class="o">();</span>
+</code></pre></div><ul>
+<li>JPQL쿼리를 실행하는 시점에서 위에 영속화 컨텍스트에 등록한 member들이 조회가 안되는 경우를 막기 위해 JPA에서는 JPQL 쿼리를 수행하기전에 flush를 실행해서 DB와 영속성 컨텍스트간에 동기화를 해준다.</li>
+</ul>
+</li>
+</ol>
+</li>
+</ul>
+<br>
+<br>
+<h3 id="flush에-대한-오해">Flush에 대한 오해</h3>
+<p>flush라는 단어의 뜻 때문에 1차 캐시가 비워진다고 오해할 수 있다. 하지만 flush해도 1차 캐시는 그대로다.1차 캐시를 flush한다는 뜻이 아니고, 쓰기 지연 SQL 저장소를 flush한다고 생각하면 편하다.</p>
+<p>flush는 영속성 컨텍스트의 변경내용을 데이터베이스에 동기화하는 일이며, <strong>영속성 컨텍스트는 트랜잭션이라는 작업 단위와 함께 유지된다고 설계</strong>하는 게 좋다. 그러면 데이터 동기화에 대한 걱정이 없어진다.</p>
+<br>
+<br>
+<br>
+<h2 id="4-준영속-상태">4. 준영속 상태</h2>
+<p>엔티티를 새로 생성해서 persist하거나, find를 통해 DB에서 조회하는 경우 1차 캐시에 엔티티가 저장된다. 이를 영속 상태라 부른다.</p>
+<p>이때 영속(managed) 상태의 엔티티가 영속성 컨텍스트에서 분리(datached)된 상태를 준영속 상태라 부르며, 영속성 컨텍스트가 제공하는 기능을 사용할 수 없다.</p>
+<ul>
+<li>
+<p><code>em.detach(entity) </code>: 특정 엔티티만 준영속 상태로 전환</p>
+</li>
+<li>
+<p><code>em.clear()</code> :  영속성 컨텍스트를 완전히 초기화</p>
+</li>
+<li>
+<p><code>em.close()</code> :  영속성 컨텍스트를 종료</p>
+</li>
+</ul>
+<br>
+<br>
+<p><strong>Ex1)</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java">
+ <span class="c1">// 영속
+</span><span class="c1"></span><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">150L</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;AAAAA&#34;</span><span class="o">);</span>
+
+<span class="c1">// 준영속
+</span><span class="c1"></span><span class="n">em</span><span class="o">.</span><span class="na">detach</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;==========================&#34;</span><span class="o">);</span>
+<span class="n">tx</span><span class="o">.</span><span class="na">commit</span><span class="o">();</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nl">Hibernate:</span> 
+    <span class="n">select</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">id</span> <span class="n">as</span> <span class="n">id1_0_0_</span><span class="o">,</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">name</span> <span class="n">as</span> <span class="n">name2_0_0_</span> 
+    <span class="n">from</span>
+        <span class="n">Member</span> <span class="n">member0_</span> 
+    <span class="n">where</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">id</span><span class="o">=?</span>
+<span class="o">==========================</span>
+</code></pre></div><br>
+<br>
+<p><strong>Ex2)</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="c1">// 영속
+</span><span class="c1"></span><span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">150L</span><span class="o">);</span>
+<span class="n">member</span><span class="o">.</span><span class="na">setName</span><span class="o">(</span><span class="s">&#34;AAAAA&#34;</span><span class="o">);</span>
+
+<span class="n">em</span><span class="o">.</span><span class="na">clear</span><span class="o">();</span>
+
+<span class="n">Member</span> <span class="n">member2</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="na">find</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">,</span> <span class="n">150L</span><span class="o">);</span>
+<span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&#34;==========================&#34;</span><span class="o">);</span>
+<span class="n">tx</span><span class="o">.</span><span class="na">commit</span><span class="o">();</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nl">Hibernate:</span> 
+    <span class="n">select</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">id</span> <span class="n">as</span> <span class="n">id1_0_0_</span><span class="o">,</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">name</span> <span class="n">as</span> <span class="n">name2_0_0_</span> 
+    <span class="n">from</span>
+        <span class="n">Member</span> <span class="n">member0_</span> 
+    <span class="n">where</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">id</span><span class="o">=?</span>
+<span class="nl">Hibernate:</span> 
+    <span class="n">select</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">id</span> <span class="n">as</span> <span class="n">id1_0_0_</span><span class="o">,</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">name</span> <span class="n">as</span> <span class="n">name2_0_0_</span> 
+    <span class="n">from</span>
+        <span class="n">Member</span> <span class="n">member0_</span> 
+    <span class="n">where</span>
+        <span class="n">member0_</span><span class="o">.</span><span class="na">id</span><span class="o">=?</span>
+<span class="o">==========================</span>
+</code></pre></div></div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2021-12-29</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/" data-title="영속성관리 - 내부 동작 방식" data-hashtags="JPA,Hibernate"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/" data-hashtag="JPA"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/" data-title="영속성관리 - 내부 동작 방식" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"></div>
+</div>
+<div id="comments"><div id="utterances">
+                <script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script>
+            </div><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>
