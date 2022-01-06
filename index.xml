@@ -7,10 +7,10 @@
             <atom:link href="https://jaeyeonme.github.io/index.xml" rel="self" type="application/rss+xml" />
         <item>
     <title>영속성관리 - 내부 동작 방식</title>
-    <link>https://jaeyeonme.github.io/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/</link>
+    <link>https://jaeyeonme.github.io/posts/jpa-persistence-management-works/</link>
     <pubDate>Wed, 29 Dec 2021 12:00:00 &#43;0000</pubDate>
     <author>Author</author>
-    <guid>https://jaeyeonme.github.io/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/</guid>
+    <guid>https://jaeyeonme.github.io/posts/jpa-persistence-management-works/</guid>
     <description><![CDATA[<div class="featured-image">
                 <img src="/images/JPA/jpa.png" referrerpolicy="no-referrer">
             </div>1. 영속성 컨텍스트  웹 어플리케이션이 구동하는 시점에 EntityManagerFactory 를 생성하여 가지고 있으며, 사용자의 요청이 있을 때 EntityManager를 생성하여 커넥션 풀(Connection Pool)을 사용해서 DB를 핸들링 하게 된다.  영속성 컨텍스트란?   엔티티를 영구 저장하는 환경

@@ -73,7 +73,7 @@
         alt="/images/profile.png"
         title="/images/profile.png" /></a></div><h2 class="home-subtitle"><div id="id-1" class="typeit"></div></h2><div class="links"><a href="https://github.com/jaeyeonme" title="GitHub" target="_blank" rel="noopener noreffer me"><i class="fab fa-github-alt fa-fw"></i></a><a href="mailto:cjyeon1022@gmail.com" title="Email" rel=" me"><i class="far fa-envelope fa-fw"></i></a><a href="/index.xml" title="RSS" target="_blank" rel="noopener noreffer me"><i class="fas fa-rss fa-fw"></i></a></div></div>
 <article class="single summary" itemscope itemtype="http://schema.org/Article"><div class="featured-image-preview">
-            <a href="/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/"><img
+            <a href="/posts/jpa-persistence-management-works/"><img
         class="lazyload"
         src="/svg/loading.min.svg"
         data-src="/images/JPA/jpa.png"
@@ -82,7 +82,7 @@
         alt="/images/JPA/jpa.png"
         title="/images/JPA/jpa.png" /></a>
         </div><h1 class="single-title" itemprop="name headline">
-        <a href="/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/">영속성관리 - 내부 동작 방식</a>
+        <a href="/posts/jpa-persistence-management-works/">영속성관리 - 내부 동작 방식</a>
     </h1><div class="post-meta"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeeon</a></span>&nbsp;<span class="post-publish">published on <time datetime="2021-12-29">2021-12-29</time></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div><div class="content">1. 영속성 컨텍스트  웹 어플리케이션이 구동하는 시점에 EntityManagerFactory 를 생성하여 가지고 있으며, 사용자의 요청이 있을 때 EntityManager를 생성하여 커넥션 풀(Connection Pool)을 사용해서 DB를 핸들링 하게 된다.  영속성 컨텍스트란?   엔티티를 영구 저장하는 환경
   EntityManager.persist(entity);
 → DB에 저장한다기 보다는 영속성 컨텍스트를 통해 엔티티를 영속화 한다는 의미
@@ -108,7 +108,7 @@ commit() 시점에 쓰기지연 SQL에 저장된 쿼리들을 다 실행시켜�
 3. 플러시(flush) : 영속성 컨텍스트의 변경을 데이터베이스에 반영(sync)
   플러시 발생
  변경 감지 수정된 엔티티 쓰기지연 SQL 저장소에 등록 쓰기 지연 SQL저장소의 쿼리를 데이터베이스에 전송(등록, 수정, 삭제 쿼리)    영속성 컨텍스트를 플러시 하는 방법</div><div class="post-footer">
-        <a href="/posts/%E1%84%8B%E1%85%A7%E1%86%BC%E1%84%89%E1%85%A9%E1%86%A8%E1%84%89%E1%85%A5%E1%86%BC%E1%84%80%E1%85%AA%E1%86%AB%E1%84%85%E1%85%B5-%E1%84%82%E1%85%A2%E1%84%87%E1%85%AE-%E1%84%83%E1%85%A9%E1%86%BC%E1%84%8C%E1%85%A1%E1%86%A8-%E1%84%87%E1%85%A1%E1%86%BC%E1%84%89%E1%85%B5%E1%86%A8/">Read More</a><div class="post-tags">
+        <a href="/posts/jpa-persistence-management-works/">Read More</a><div class="post-tags">
                 <i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></div></div>
 </article></div></div>
             </main><footer class="footer">
