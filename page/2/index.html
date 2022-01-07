@@ -73,6 +73,102 @@
         alt="/images/profile.png"
         title="/images/profile.png" /></a></div><h2 class="home-subtitle"><div id="id-1" class="typeit"></div></h2><div class="links"><a href="https://github.com/jaeyeonme" title="GitHub" target="_blank" rel="noopener noreffer me"><i class="fab fa-github-alt fa-fw"></i></a><a href="mailto:cjyeon1022@gmail.com" title="Email" rel=" me"><i class="far fa-envelope fa-fw"></i></a><a href="/index.xml" title="RSS" target="_blank" rel="noopener noreffer me"><i class="fas fa-rss fa-fw"></i></a></div></div>
 <article class="single summary" itemscope itemtype="http://schema.org/Article"><div class="featured-image-preview">
+            <a href="/posts/jpa-value-type/"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></a>
+        </div><h1 class="single-title" itemprop="name headline">
+        <a href="/posts/jpa-value-type/">값 타입</a>
+    </h1><div class="post-meta"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-publish">published on <time datetime="2021-12-29">2021-12-29</time></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div><div class="content">1. 기본값 타입  엔티티 타입
+  @Entity로 정의하는 객체
+  데이터가 변해도 식별자로 지속해서 추적 가능
+⇒ 엔티티 내부의 모든 값들을 바꿔도 식별자만 유지되면 추적이 가능하다는 의미
+  Ex: 회원 엔티티의 키나 나이 값을 변경해도 식별자로 인식 가능
+  값 타입
+ int, integer, String처럼 단순히 값으로 사용하는 자바 기본 타입이나 객체 식별자가 없고 값만 있으므로 변경시 추적 불가 Ex: 숫자 100을 200으로 변경하면 완전히 다른 값으로 대체  값 타입 분류
+ 기본값 타입  자바 기본 타입(int, double) 래퍼 클래스(Integer, Long) String   임베디드 타입(enbedded type, 복합 값 타입)  Ex: 우편번호, 좌표같은 복합 값을 Position클래스로 만들어 쓰려고 하는 것을 임베디드 타입   컬렉션 값 타입(collection value type)  Java collection(Array, Map, Set)에 값을 넣을수 있는 것을 컬렉션 값 타입이라 한다.    값 타입 : 기본값 타입
+ Ex: String name, int age 생명주기를 엔티티에 의존  회원을 삭제하면 이름, 나이 필드도 함께 삭제   값 타입은 공유하면 안된다.  Side Effect → 회원 이름 변경시 다른 회원의 이름도 함께 변경되면 안된다.     참고: 자바의 기본 타입은 절대 공유가 되지 않는다.  int, double 같은 기본 타입(primitive type)은 절대 공유되지 않는다. 기본 타입은 항상 값을 복사함 Integer같은 래퍼 클래스나 String 같은 특수한 클래스는 공유 가능한 객체이지만 변경할 수 없다.    2. 임베디드 타입  개요
+ 새로운 값 타입을 직접 정의할 수 있다. JPA는 임베디드 타입(embedded type)이라 한다. 주로 기본 값 타입을 모아서 만들어서 복합 값 타입이라고도 함 int, String과 같은 값 타입  임베디드 타입 사용법
+ @Embeddable : 값 타입을 정의하는 곳에 표시 @Embedded : 값 타입을 사용하는 곳에 표시 기본 생성자 필수   Example  예제를 통해 알아보는게 이해하기 쉽다.  회원 엔티티는 이름, 근무 시작일, 근무 종료일, 주소 도시, 주소 번지, 주소 우편번호를 가진다.
+  city, street, zipcode는 주소로 합칠 수 있을 것 같다.
+  근무 시작일, 근무 종료일은 근무시간으로 합칠 수 있을 것 같다.
+  회원 엔티티의 몇몇 값을 주소, 근무시간으로 합치면 어떻게 될까.
+코드를 통해 좀 더 자세히 알아보자.
+@Embeddable //값 타입이 정의되는 곳에 @Embeddable 사용 public class Period { private LocalDateTime startDate; private LocalDateTime endDate; public Period() { } } @Embeddable //값 타입이 정의되는 곳에 @Embeddable 사용 public class Address { private String city; private String street; private String zipcode; public Address() { } } @Entity public class Member { @Id @GeneratedValue @Column(name = &#34;MEMBER_ID&#34;) private Long id; @Column(name = &#34;USERNAME&#34;) private String name; /* //임베디드 타입을 사용하지 않으면 주석 내의 기존 형태로 값 타입으로 선언해줘야 한다. //Period private LocalDateTime startDate; private LocalDateTime endDate; //Address private String city; private String street; private String zipcode; */ @Embedded //값 타입이 사용되는 곳에 @Embedded 사용  private Period workPeriod; @Embedded //값 타입이 사용되는 곳에 @Embedded 사용  private Address homeAddress; } 
+임베디드 타입의 장점
+ 재사용  Period나 Address는 다른 객체에서도 사용할 수 있어 재사용성을 높힌다.   높은 응집도 Period.isWork()처럼 해당 값 타입만 사용하는 의미있는 메소드를 만들 수 있음  private boolean isWork(){ ... }  임베디드 타입을 포함한 모든 값 타입은, 값 타입을 소유한 엔티티에 생명주기를 의존한다.</div><div class="post-footer">
+        <a href="/posts/jpa-value-type/">Read More</a><div class="post-tags">
+                <i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></div></div>
+</article><article class="single summary" itemscope itemtype="http://schema.org/Article"><div class="featured-image-preview">
+            <a href="/posts/jpa-proxy-and-management/"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></a>
+        </div><h1 class="single-title" itemprop="name headline">
+        <a href="/posts/jpa-proxy-and-management/">프록시와 연관관계 관리</a>
+    </h1><div class="post-meta"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-publish">published on <time datetime="2021-12-29">2021-12-29</time></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div><div class="content">1. 프록시   프록시란?
+ 테이블을 조회해서 객체를 가져올 때 연관관계 객체는 안가져 오고 싶으면 어떻게 해야 할까?
+  em.find() : 데이터베이스를 통해서 실제 엔티티 객체 조회
+  em.getReference(): 데이터베이스 조회를 미루는 가짜(프록시) 엔티티 객체 조회
+Member member = em.getReference(Member.class, 1L); System.out.println(&#34;member = &#34; + member.getClass()); // HibernateProxy 객체 getReference() 메서드를 사용하면 진짜 객체가 아닌 하이버네이트 내부 로직으로 프록시 엔티티 객체 반환
+내부 구조는 틀은 같지만 내용이 비어있다.
+프록시 객체를 반환한다." 프록시 객체를 반환한다.    특징
+  실제 클래스를상속받아서 만들어짐
+  실제 클래스와 겉 모양이 같다.
+  사용하는 입장에서는 진짜 객체인지 구분 필요가 없다. (이론적으로)
+  프록시 객체는 실제 객체의 참조(target)를 보관한다.
+  프록시 객체를 호출(getName())하면 프록시 객체는 실제 객체의 메소드 호출
+  프록시는 처음 사용할 때 한 번만 초기화
+  프록시 객체를 초기화 할 때 프록시 객체가 실제 엔티티로 바뀌는 것은 아님, 초기화되면 프록시 객체를 통해 실제 엔티티에 접근 가능
+  프록시 객체는 원본 엔티티를 상속받음, 따라서 타입 체크시 주의해야함( == 비교 실패, 대신 instance of 사용)
+m1.getClass() == m2.getClass() //false m1 instanceof Member m2 instanceof Member     영속성 컨텍스트에 찾는 엔티티가 이미 있으면 em.getReference()를 호출해도 실제 엔티티 반환
+Member m1 = em.find(Member.class, member1.getId()); System.out.println(&#34;m1 = &#34;+ m1.getClass());//Member  Member reference = em.getReference(Member.class, member1.getId()); System.out.println(&#34;reference = &#34; reference.getClass()); //Member  m1 == reference //true 이미 Member를 1차 캐시에도 올라와 있는데, 프록시를 반환할 필요가 없다.
+    반대로 getReference()로 프록시객체를 가지고 있으면 실제로 find()를 했을때도 프록시 객체를 반환함
+  영속성 컨텍스트의 도움을 받을 수 없는 준영속 상태일 때, 프록시를 초기화하면 문제 발생
+Member refMember = em.getReference(Member.class, member.getId()); System.out.println(&#34;refMember = &#34;+ refMember.getClass());//Proxy  em.detach(refMember); //em.clear  refMember.getUsername(); //org.hibernate.LazyInitializationException   프록시 객체의 초기화
+Member member = em.getRefernce(Member.class, &#34;id1&#34;);//(1) member.getName();//(2) 코드 1라인에서 getReference()를 호출하면 프록시객체를 가져온 다음, getName()을 호출하면
+JPA가 영속성 컨텍스트에 초기화 요청을 한다.
+영속성 컨텍스트에서는 실제 DB를 조회해서 가져온 다음 실제 Entity에 값을 넣어 생성한 다음 프록시 객체는
+실제 엔티티를 연결해서 실제 엔티티를 반환한다.
+그 이후에는 이미 초기화되어있는 프록시객체 여기에 해당 엔티티를 반환한다.
+프록시 확인
+ 프록시 인스턴스의 초기화 여부 확인 : PersistenceUnitUtil.isLoaded(Object entity) → entityManagerFactory.getPersistenceUnitUtil().isLoaded(object) 프록시 클래스 확인 방법 : entity.getClass().getname() 출력(..javasist.. or HibernateProxy&hellip;) 프록시 강제 초기화 : org.hibernate.Hibernate.initialize(entity); 참고: JPA 표준은 강제 초기화 없음 강제호출 : method.getName();  2. 즉시로딩과 지연로딩  지연 로딩 Member를 조회할 때 Team(연관관계)도 함께 조회해야 할까? : 단순히 member 정보만사용하는 비즈니스 로직
+지연 로딩 LAZY을 사용해서 프록시로 조회
+fetch = FetchType.LAZY
+/*Member*/ @Entity public class Member { ... @ManyToOne(fetch = FetchType.LAZY) //지연로딩 사용  @JoinColumn(name=&#34;TEAM_ID&#34;) private Team team; ... } ... Member m = em.find(Member.class, member1.getId()); // Member 객체 반환 System.out.println(&#34;m = &#34;+ m.getTeam().getClass()); // Team$HibernateProxy객체 반환 m.getTeam().getName() // team을 실제로 사용하는 시점에서 db조회 엔티티 반환 ... 연관관계에 있는 다른 엔티티를 사용하는 빈도수가 낮을 경우 지연로딩을 사용해 불필요한 엔티티 조회를 막을 수 있다.
+즉시 로딩 ❓Member와 Team을 같이 쓰는 빈도가 높을 경우에는 어떻게 해야 할까?
+즉시 로딩 EAGER를 사용해서 함꼐 조회 fetch = FetchType.EAGER
+/*Member*/ @Entity public class Member{ ... @ManyToOne(fetch = FetchType.EAGER) //즉시로딩 사용  @JoinColumn(name=&#34;TEAM_ID&#34;) private Team team; ... } ... Member m = em.</div><div class="post-footer">
+        <a href="/posts/jpa-proxy-and-management/">Read More</a><div class="post-tags">
+                <i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></div></div>
+</article><article class="single summary" itemscope itemtype="http://schema.org/Article"><div class="featured-image-preview">
+            <a href="/posts/jpa-advanced-mapping/"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/jpa.png"
+        data-srcset="/images/JPA/jpa.png, /images/JPA/jpa.png 1.5x, /images/JPA/jpa.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/jpa.png"
+        title="/images/JPA/jpa.png" /></a>
+        </div><h1 class="single-title" itemprop="name headline">
+        <a href="/posts/jpa-advanced-mapping/">고급 매핑</a>
+    </h1><div class="post-meta"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-publish">published on <time datetime="2021-12-29">2021-12-29</time></span>&nbsp;<span class="post-category">included in <a href="/categories/jpa/"><i class="far fa-folder fa-fw"></i>JPA</a></span></div><div class="content">1. 상속관계 매핑   관계형 데이터베이스는 상속 관계X 슈퍼타입 서브타입 관계라는 모델링 기법이 객체 상속과 유사 상속관계 매핑 : 객체의 상속과 구조와 DB의 슈퍼타입 서브타입 관계를 매핑  Album, Movie, Book은 모두 id, name, price를 가지고 있다(공통 변수)
+슈퍼타입 서브타입 논리 모델을 실제 물리 모델로 구현하는 방법 1. 조인전략  Item, Album에 PK,FK가 같아 각각의 테이블에 insert가 수행하고 Item내에 타입을 구분하는 컬럼을 만들어서 구해온다. 장점  정규화도 되어있고, 제약조건을 부모에 걸어 맞출 수 있다.  ex: Order 테이블에서 특정 아이템(영화)의 가격을 볼 때 ITEM 테이블만 봐도 된다.   저장공간 효율화   단점  조회시 조인이 많을 경우 성능 저하 조회 쿼리가 복잡함 데이터 저장시 INSERT SQL 2번 호출(큰 문제는 아님)   조인이 많아도 조건이 잘 걸려있을 경우 성능 하락이 크지 않고 저장공간이 효율적으로 되기에 오히려 더 좋을 수 있다는 점을 고려해야 한다.  2. 단일 테이블 전략 (default)  논리모델을 한 테이블로 합쳐버리는 방법 한 테이블에 다 넣어 놓고 어떤 테이블인지 구분하는 컬럼(ex:DTYPE)을 통해 구분한다. 테이블은 ITEM 테이블 하나만 관리된다. 성능에서 우위를 가질 수 있다. (select or insert가 한번에 수행으로 된다.) @DiscriminatorColumn 이 필수로 들어간다(기입하지 않아도 자동으로 들어감) 장점  조인이 필요 없기에 일반적으로 조회 성능이 빠름 조회 쿼리가 단순함   단점  자식 엔티티가 매핑한 컬럼은 모두 nullable 해야 한다. 단일 테이블에 모든 것을 저장하기에 테이블이 커질 수 있고 상황에 따라서 조회성능이 더 느려질 수 있다. (임계점을 넘을 저도의 상황은 거의 오지 않는다.)    3. 구현 클래스마다 테이블 전략  각각의 테이블마다 별개로 만들어서 따로 관리 ITEM 테이블을 생성하지 않고 ALBUM, MOVIE, BOOK 테이블에서 각각 id, name, price 필드를 가지고 있다. @DiscriminatorColumn을 사용할 수 없다. (구분할 이유가 없다.) ITEM을 조회하면 ALBUM, MOVIE, BOOK 세개의 테이블을 UNION ALL으로 전부 조회해서 가져온다. (단점) 추천하지 않는 전략 (개발자, DBA 양측에서) 장점  서브 타입을 명확하게 구분해서 처리할 때 효과적 Not Null 제약조건 가능   단점  여러 자식 테이블을 함께 조회할 때 성능이 느림 (UNION SQL) 자식 테이블을 통합해서 쿼리하기 힘듬    2. 주요 어노테이션 @Inheritance(strategy = InheritanceType.XXX)
+ JOINED : 조인전략 SINGLE_TABLE : 단일 테이블 전략 TABLE_PER_CLASS : 구현 클래스마다 테이블 전략  @DiscriminatorColumn(name = &ldquo;DTYPE&rdquo;)
+ default : DTYPE 이라는 Column이 super class의 table에 생기고, DTYPE의 값은 sub class의 이름으로 지정된다. SingleTable 전략에서 없어도 DTYPE이 생성되기도 하는데, 그래도 운영상 써주자. 이 어노테이션은 상위 클래스(Item)에서 명시된다. 데이터베이스의 상위 테이블(Item 테이블)에게 구분자 역할을 DTYPE 칼럼을 넣어준다. 애노테이션의 name 속성으로 컬럼명을 바꿔줄 수 있다 (이름속성으로 쓰자).  @DiscriminatorValue(“XXX”)
+ 이 어노테이션은 하위 클래스(ALBUM, MOVIE, BOOK)에서 사용된다. 상위 테이블(ITEM 테이블)을 조회할때 DTYPE 칼럼에 사용되는 value를 설정해주는 기능이다. 애노테이션을 사용하지 않을 경우 기본 Default 값인 Entity 이름으로 value값이 채워지게 된다. default: classname  3. @MappedSuperclass   공통 매핑 정보가 필요할 때 사용(id, name)  ex: 모든 테이블에 row 생성일, 수정일을 등록해야하는 경우(createdAt, updatedAt)     상속관계 매핑이 아니다. 엔티티도 아니고, 테이블과 매핑되지도 않는다. 부모 클래스를 상속받는 자식 클래스에 매핑 정보만 제공 부모타입으로 조회, 검색 불가 직접 생성해서 사용할 일이 없으므로 추상클래스 추천  @Entity클래스는 엔티티나 @MappedSuperclass로 지정한 클래스만 상속 가능
+@MappedSuperclass public abstract class BaseEntity { private String createdBy; private LocalDateTime createdDate; private String modifiedBy; private LocalDateTime lastModifiedDate; } @Entity public class Member extends BaseEntity { } @Entity public class Team extends BaseEntity { } Member member = new Member(); member.</div><div class="post-footer">
+        <a href="/posts/jpa-advanced-mapping/">Read More</a><div class="post-tags">
+                <i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/jpa/">JPA</a>,&nbsp;<a href="/tags/hibernate/">Hibernate</a></div></div>
+</article><article class="single summary" itemscope itemtype="http://schema.org/Article"><div class="featured-image-preview">
             <a href="/posts/jpa-mapping-various-associations/"><img
         class="lazyload"
         src="/svg/loading.min.svg"

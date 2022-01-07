@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>Spring Data JPA가 제공하는 QueryDSL - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="Spring Data JPA가 제공하는 QueryDSL" />
+<meta property="og:description" content="1. 인터페이스 지원 - QuerydslPredicateExecutor  공식 URL : https://docs.spring.io/spring-data/jpa/docs/2.2.3.RELEASE/reference/html/#core.extensions.querydsl  QuerydslPredicateExecutor 인터페이스
+public interface QuerydslPredicateExecutor&lt;T&gt; { Optional&lt;T&gt; findById(Predicate predicate); Iterable&lt;T&gt; findAll(Predicate predicate); long count(Predicate predicate); boolean exists(Predicate predicate); // … more functionality omitted.  } 
+리포지토리에 적용
+interface MemberRepository extends JpaRepository&lt;User, Long&gt;, QuerydslPredicateExecutor&lt;User&gt; { } Iterable result = memberRepository.findAll( member.age.between(10, 40) .and(member.username.eq(&#34;member1&#34;)) ); 
+한계점
+ 조인X (묵시적 조인은 가능하지만 left join이 불가능하다) 클라이언트가 Querydsl에 의존해야 한다. 서비스 클래스가 Querydsl 이라는 구현 기술에 의존해야 한다. 복잡한 실무환경에서 사용하기에는 한계가 명확하다.  참고: QuerydslPredicateExecutor 는 Pageable, Sort를 모두 지원하고 정상 동작한다.
+2. Querydsl Web 지원  공식 URL : https://docs.spring.io/spring-data/jpa/docs/2.2.3.RELEASE/reference/html/#core.web.type-safe  한계점
+ 단순한 조건만 가능 조건을 커스텀하는 기능이 복잡하고 명시적이지 않음 컨트롤러가 Querydsl에 의존 복잡한 실무환경에서 사용하기에는 한계가 명확  3. 리포지토리 지원 - QuerydslRepositorySupport QuerydslRepositorySupport
+장점
+ getQuerydsl().applyPagination() 스프링 데이터가 제공하는 페이징을 Querydsl로 편리하게 변환 가능(단! Sort는 오류발생) from() 으로 시작 가능(최근에는 QueryFactory를 사용해서 select() 로 시작하는 것이 더 명시적) EntityManager 제공  한계
+ Querydsl 3.x 버전을 대상으로 만듬 Querydsl 4.x 에 나온 JPAQueryFactory로 시작할 수 없음  select로 시작할 수 없음 (from으로 시작해야 함)   QueryFactory 를 제공하지 않음 스프링 데이터 Sort 기능이 정상 동작하지 않음  4. Querydsl 지원 클래스 직접 만들기 스프링 데이터가 제공하는 QuerydslRepositorySupport 가 지닌 한계를 극복하기 위해 직접 QueryDSL 지원 클래스르 만들어보자.
+장점
+ 스프링 데이터가 제공하는 페이징을 편리하게 변환 페이징과 카운트 쿼리 분리 가능 스프링 데이터 Sort 지원 select() , selectFrom() 으로 시작 가능 EntityManager , QueryFactory 제공  Querydsl4RepositorySupport /** * Querydsl 4.x 버전에 맞춘 Querydsl 지원 라이브러리 * * @author Yonghan Kim * org.springframework.data.jpa.repository.support.QuerydslRepositorySupport */ @Repository public abstract class Querydsl4RepositorySupport { private final Class domainClass; private Querydsl querydsl; private EntityManager entityManager; private JPAQueryFactory queryFactory; public Querydsl4RepositorySupport(Class&lt;?&gt; domainClass) { Assert.notNull(domainClass, &#34;Domain class must not be null!&#34;); this.domainClass = domainClass; } @Autowired public void setEntityManager(EntityManager entityManager) { Assert.notNull(entityManager, &#34;EntityManager must not be null!&#34;); JpaEntityInformation entityInformation = JpaEntityInformationSupport.getEntityInformation(domainClass, entityManager); SimpleEntityPathResolver resolver = SimpleEntityPathResolver.INSTANCE; EntityPath path = resolver.createPath(entityInformation.getJavaType()); this.entityManager = entityManager; this.querydsl = new Querydsl(entityManager, new PathBuilder&lt;&gt;(path.getType(), path.getMetadata())); this.queryFactory = new JPAQueryFactory(entityManager); } @PostConstruct public void validate() { Assert.notNull(entityManager, &#34;EntityManager must not be null!&#34;); Assert.notNull(querydsl, &#34;Querydsl must not be null!&#34;); Assert.notNull(queryFactory, &#34;QueryFactory must not be null!&#34;); } protected JPAQueryFactory getQueryFactory() { return queryFactory; } protected Querydsl getQuerydsl() { return querydsl; } protected EntityManager getEntityManager() { return entityManager; } protected &lt;T&gt; JPAQuery&lt;T&gt; select(Expression&lt;T&gt; expr) { return getQueryFactory().select(expr); } protected &lt;T&gt; JPAQuery&lt;T&gt; selectFrom(EntityPath&lt;T&gt; from) { return getQueryFactory().selectFrom(from); } protected &lt;T&gt; Page&lt;T&gt; applyPagination(Pageable pageable, Function&lt;JPAQueryFactory, JPAQuery&gt; contentQuery) { JPAQuery jpaQuery = contentQuery.apply(getQueryFactory()); List&lt;T&gt; content = getQuerydsl().applyPagination(pageable, jpaQuery).fetch(); return PageableExecutionUtils.getPage(content, pageable, jpaQuery::fetchCount); } protected &lt;T&gt; Page&lt;T&gt; applyPagination(Pageable pageable, Function&lt;JPAQueryFactory, JPAQuery&gt; contentQuery, Function&lt;JPAQueryFactory, JPAQuery&gt; countQuery) { JPAQuery jpaContentQuery = contentQuery.apply(getQueryFactory()); List&lt;T&gt; content = getQuerydsl().applyPagination(pageable, jpaContentQuery).fetch(); JPAQuery countResult = countQuery.apply(getQueryFactory()); return PageableExecutionUtils.getPage(content, pageable, countResult::fetchCount); } } 
+Querydsl4RepositorySupport 사용 코드 @Repository public class MemberTestRepository extends Querydsl4RepositorySupport { public MemberTestRepository() { super(Member.class); } public List&lt;Member&gt; basicSelect() { return select(member) .from(member) .fetch(); } public List&lt;Member&gt; basicSelectFrom() { return selectFrom(member) .fetch(); } public Page&lt;Member&gt; searchPageByApplyPage(MemberSearchCondition condition, Pageable pageable) { JPAQuery&lt;Member&gt; query = selectFrom(member) .leftJoin(member.team, team) .where(usernameEq(condition.getUsername()), teamNameEq(condition.getTeamName()), ageGoe(condition.getAgeGoe()), ageLoe(condition.getAgeLoe()) ); List&lt;Member&gt; content = getQuerydsl()." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/spring-data-jpa-with-querydsl/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-01-01T10:00:00+00:00" />
+<meta property="article:modified_time" content="2022-01-01T10:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Spring Data JPA가 제공하는 QueryDSL"/>
+<meta name="twitter:description" content="1. 인터페이스 지원 - QuerydslPredicateExecutor  공식 URL : https://docs.spring.io/spring-data/jpa/docs/2.2.3.RELEASE/reference/html/#core.extensions.querydsl  QuerydslPredicateExecutor 인터페이스
+public interface QuerydslPredicateExecutor&lt;T&gt; { Optional&lt;T&gt; findById(Predicate predicate); Iterable&lt;T&gt; findAll(Predicate predicate); long count(Predicate predicate); boolean exists(Predicate predicate); // … more functionality omitted.  } 
+리포지토리에 적용
+interface MemberRepository extends JpaRepository&lt;User, Long&gt;, QuerydslPredicateExecutor&lt;User&gt; { } Iterable result = memberRepository.findAll( member.age.between(10, 40) .and(member.username.eq(&#34;member1&#34;)) ); 
+한계점
+ 조인X (묵시적 조인은 가능하지만 left join이 불가능하다) 클라이언트가 Querydsl에 의존해야 한다. 서비스 클래스가 Querydsl 이라는 구현 기술에 의존해야 한다. 복잡한 실무환경에서 사용하기에는 한계가 명확하다.  참고: QuerydslPredicateExecutor 는 Pageable, Sort를 모두 지원하고 정상 동작한다.
+2. Querydsl Web 지원  공식 URL : https://docs.spring.io/spring-data/jpa/docs/2.2.3.RELEASE/reference/html/#core.web.type-safe  한계점
+ 단순한 조건만 가능 조건을 커스텀하는 기능이 복잡하고 명시적이지 않음 컨트롤러가 Querydsl에 의존 복잡한 실무환경에서 사용하기에는 한계가 명확  3. 리포지토리 지원 - QuerydslRepositorySupport QuerydslRepositorySupport
+장점
+ getQuerydsl().applyPagination() 스프링 데이터가 제공하는 페이징을 Querydsl로 편리하게 변환 가능(단! Sort는 오류발생) from() 으로 시작 가능(최근에는 QueryFactory를 사용해서 select() 로 시작하는 것이 더 명시적) EntityManager 제공  한계
+ Querydsl 3.x 버전을 대상으로 만듬 Querydsl 4.x 에 나온 JPAQueryFactory로 시작할 수 없음  select로 시작할 수 없음 (from으로 시작해야 함)   QueryFactory 를 제공하지 않음 스프링 데이터 Sort 기능이 정상 동작하지 않음  4. Querydsl 지원 클래스 직접 만들기 스프링 데이터가 제공하는 QuerydslRepositorySupport 가 지닌 한계를 극복하기 위해 직접 QueryDSL 지원 클래스르 만들어보자.
+장점
+ 스프링 데이터가 제공하는 페이징을 편리하게 변환 페이징과 카운트 쿼리 분리 가능 스프링 데이터 Sort 지원 select() , selectFrom() 으로 시작 가능 EntityManager , QueryFactory 제공  Querydsl4RepositorySupport /** * Querydsl 4.x 버전에 맞춘 Querydsl 지원 라이브러리 * * @author Yonghan Kim * org.springframework.data.jpa.repository.support.QuerydslRepositorySupport */ @Repository public abstract class Querydsl4RepositorySupport { private final Class domainClass; private Querydsl querydsl; private EntityManager entityManager; private JPAQueryFactory queryFactory; public Querydsl4RepositorySupport(Class&lt;?&gt; domainClass) { Assert.notNull(domainClass, &#34;Domain class must not be null!&#34;); this.domainClass = domainClass; } @Autowired public void setEntityManager(EntityManager entityManager) { Assert.notNull(entityManager, &#34;EntityManager must not be null!&#34;); JpaEntityInformation entityInformation = JpaEntityInformationSupport.getEntityInformation(domainClass, entityManager); SimpleEntityPathResolver resolver = SimpleEntityPathResolver.INSTANCE; EntityPath path = resolver.createPath(entityInformation.getJavaType()); this.entityManager = entityManager; this.querydsl = new Querydsl(entityManager, new PathBuilder&lt;&gt;(path.getType(), path.getMetadata())); this.queryFactory = new JPAQueryFactory(entityManager); } @PostConstruct public void validate() { Assert.notNull(entityManager, &#34;EntityManager must not be null!&#34;); Assert.notNull(querydsl, &#34;Querydsl must not be null!&#34;); Assert.notNull(queryFactory, &#34;QueryFactory must not be null!&#34;); } protected JPAQueryFactory getQueryFactory() { return queryFactory; } protected Querydsl getQuerydsl() { return querydsl; } protected EntityManager getEntityManager() { return entityManager; } protected &lt;T&gt; JPAQuery&lt;T&gt; select(Expression&lt;T&gt; expr) { return getQueryFactory().select(expr); } protected &lt;T&gt; JPAQuery&lt;T&gt; selectFrom(EntityPath&lt;T&gt; from) { return getQueryFactory().selectFrom(from); } protected &lt;T&gt; Page&lt;T&gt; applyPagination(Pageable pageable, Function&lt;JPAQueryFactory, JPAQuery&gt; contentQuery) { JPAQuery jpaQuery = contentQuery.apply(getQueryFactory()); List&lt;T&gt; content = getQuerydsl().applyPagination(pageable, jpaQuery).fetch(); return PageableExecutionUtils.getPage(content, pageable, jpaQuery::fetchCount); } protected &lt;T&gt; Page&lt;T&gt; applyPagination(Pageable pageable, Function&lt;JPAQueryFactory, JPAQuery&gt; contentQuery, Function&lt;JPAQueryFactory, JPAQuery&gt; countQuery) { JPAQuery jpaContentQuery = contentQuery.apply(getQueryFactory()); List&lt;T&gt; content = getQuerydsl().applyPagination(pageable, jpaContentQuery).fetch(); JPAQuery countResult = countQuery.apply(getQueryFactory()); return PageableExecutionUtils.getPage(content, pageable, countResult::fetchCount); } } 
+Querydsl4RepositorySupport 사용 코드 @Repository public class MemberTestRepository extends Querydsl4RepositorySupport { public MemberTestRepository() { super(Member.class); } public List&lt;Member&gt; basicSelect() { return select(member) .from(member) .fetch(); } public List&lt;Member&gt; basicSelectFrom() { return selectFrom(member) .fetch(); } public Page&lt;Member&gt; searchPageByApplyPage(MemberSearchCondition condition, Pageable pageable) { JPAQuery&lt;Member&gt; query = selectFrom(member) .leftJoin(member.team, team) .where(usernameEq(condition.getUsername()), teamNameEq(condition.getTeamName()), ageGoe(condition.getAgeGoe()), ageLoe(condition.getAgeLoe()) ); List&lt;Member&gt; content = getQuerydsl()."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/spring-data-jpa-with-querydsl/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/spring-data-jpa-and-querydsl/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "Spring Data JPA가 제공하는 QueryDSL",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/spring-data-jpa-with-querydsl\/"
+        },"genre": "posts","keywords": "QueryDSL","wordcount":  596 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/spring-data-jpa-with-querydsl\/","datePublished": "2022-01-01T10:00:00+00:00","dateModified": "2022-01-01T10:00:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">Spring Data JPA가 제공하는 QueryDSL</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/querydsl/"><i class="far fa-folder fa-fw"></i>QueryDSL</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2022-01-01">2022-01-01</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;596 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;3 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/querydsl.png"
+        data-srcset="/images/JPA/querydsl.png, /images/JPA/querydsl.png 1.5x, /images/JPA/querydsl.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/querydsl.png"
+        title="/images/JPA/querydsl.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#1-인터페이스-지원---querydslpredicateexecutor">1. 인터페이스 지원 - QuerydslPredicateExecutor</a></li>
+    <li><a href="#2-querydsl-web-지원">2. Querydsl Web 지원</a></li>
+    <li><a href="#3-리포지토리-지원---querydslrepositorysupport">3. 리포지토리 지원 - QuerydslRepositorySupport</a></li>
+    <li><a href="#4-querydsl-지원-클래스-직접-만들기">4. Querydsl 지원 클래스 직접 만들기</a>
+      <ul>
+        <li><a href="#querydsl4repositorysupport">Querydsl4RepositorySupport</a></li>
+        <li><a href="#querydsl4repositorysupport-사용-코드">Querydsl4RepositorySupport 사용 코드</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="1-인터페이스-지원---querydslpredicateexecutor">1. 인터페이스 지원 - QuerydslPredicateExecutor</h2>
+<ul>
+<li>공식 URL : <a href="https://docs.spring.io/spring-data/jpa/docs/2.2.3.RELEASE/reference/html/#core.extensions.querydsl" target="_blank" rel="noopener noreffer"><code>https://docs.spring.io/spring-data/jpa/docs/2.2.3.RELEASE/reference/html/#core.extensions.querydsl</code></a></li>
+</ul>
+<br>
+<br>
+<p><strong>QuerydslPredicateExecutor 인터페이스</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">QuerydslPredicateExecutor</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="o">{</span>
+
+	<span class="n">Optional</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="nf">findById</span><span class="o">(</span><span class="n">Predicate</span> <span class="n">predicate</span><span class="o">);</span> 
+	<span class="n">Iterable</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="nf">findAll</span><span class="o">(</span><span class="n">Predicate</span> <span class="n">predicate</span><span class="o">);</span> 
+	<span class="kt">long</span> <span class="nf">count</span><span class="o">(</span><span class="n">Predicate</span> <span class="n">predicate</span><span class="o">);</span> 
+	<span class="kt">boolean</span> <span class="nf">exists</span><span class="o">(</span><span class="n">Predicate</span> <span class="n">predicate</span><span class="o">);</span>
+
+	<span class="c1">// … more functionality omitted.
+</span><span class="c1"></span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<p><strong>리포지토리에 적용</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">interface</span> <span class="nc">MemberRepository</span> <span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">User</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;,</span> 
+<span class="n">QuerydslPredicateExecutor</span><span class="o">&lt;</span><span class="n">User</span><span class="o">&gt;</span> <span class="o">{</span> 
+<span class="o">}</span>
+</code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">Iterable</span> <span class="n">result</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findAll</span><span class="o">(</span> 
+            <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">between</span><span class="o">(</span><span class="n">10</span><span class="o">,</span> <span class="n">40</span><span class="o">)</span> 
+            <span class="o">.</span><span class="na">and</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">))</span> 
+<span class="o">);</span>
+</code></pre></div><br>
+<p><strong>한계점</strong></p>
+<ul>
+<li>조인X (묵시적 조인은 가능하지만 left join이 불가능하다)</li>
+<li>클라이언트가 Querydsl에 의존해야 한다. 서비스 클래스가 Querydsl 이라는 구현 기술에 의존해야 한다.</li>
+<li>복잡한 실무환경에서 사용하기에는 한계가 명확하다.</li>
+</ul>
+<br>
+<br>
+<p><strong>참고</strong>: <code>QuerydslPredicateExecutor</code> 는 Pageable, Sort를 모두 지원하고 정상 동작한다.</p>
+<br>
+<br>
+<br>
+<h2 id="2-querydsl-web-지원">2. Querydsl Web 지원</h2>
+<ul>
+<li>공식 URL : <a href="https://docs.spring.io/spring-data/jpa/docs/2.2.3.RELEASE/reference/html/#core.web.type-safe" target="_blank" rel="noopener noreffer">https://docs.spring.io/spring-data/jpa/docs/2.2.3.RELEASE/reference/html/#core.web.type-safe</a></li>
+</ul>
+<br>
+<p><strong>한계점</strong></p>
+<ul>
+<li>단순한 조건만 가능</li>
+<li>조건을 커스텀하는 기능이 복잡하고 명시적이지 않음</li>
+<li>컨트롤러가 Querydsl에 의존</li>
+<li>복잡한 실무환경에서 사용하기에는 한계가 명확</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="3-리포지토리-지원---querydslrepositorysupport">3. 리포지토리 지원 - QuerydslRepositorySupport</h2>
+<p><strong>QuerydslRepositorySupport</strong></p>
+<br>
+<p><strong>장점</strong></p>
+<ul>
+<li><code>getQuerydsl().applyPagination()</code> 스프링 데이터가 제공하는 페이징을 Querydsl로 편리하게 변환 가능(단! Sort는 오류발생)</li>
+<li><code>from()</code> 으로 시작 가능(최근에는 QueryFactory를 사용해서 <code>select()</code> 로 시작하는 것이 더 명시적)</li>
+<li>EntityManager 제공</li>
+</ul>
+<br>
+<p><strong>한계</strong></p>
+<ul>
+<li>Querydsl 3.x 버전을 대상으로 만듬</li>
+<li>Querydsl 4.x 에 나온 JPAQueryFactory로 시작할 수 없음
+<ul>
+<li>select로 시작할 수 없음 (from으로 시작해야 함)</li>
+</ul>
+</li>
+<li><code>QueryFactory</code> 를 제공하지 않음</li>
+<li>스프링 데이터 Sort 기능이 정상 동작하지 않음</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="4-querydsl-지원-클래스-직접-만들기">4. Querydsl 지원 클래스 직접 만들기</h2>
+<p>스프링 데이터가 제공하는 <code>QuerydslRepositorySupport</code> 가 지닌 한계를 극복하기 위해 <br> 직접 QueryDSL 지원 클래스르 만들어보자.</p>
+<br>
+<p><strong>장점</strong></p>
+<ul>
+<li>스프링 데이터가 제공하는 페이징을 편리하게 변환</li>
+<li>페이징과 카운트 쿼리 분리 가능</li>
+<li>스프링 데이터 Sort 지원</li>
+<li><code>select()</code> , <code>selectFrom()</code> 으로 시작 가능</li>
+<li><code>EntityManager</code> , <code>QueryFactory</code> 제공</li>
+</ul>
+<br>
+<br>
+<h3 id="querydsl4repositorysupport">Querydsl4RepositorySupport</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="cm">/**
+</span><span class="cm"> * Querydsl 4.x 버전에 맞춘 Querydsl 지원 라이브러리
+</span><span class="cm"> *
+</span><span class="cm"> * @author Yonghan Kim
+</span><span class="cm"> * org.springframework.data.jpa.repository.support.QuerydslRepositorySupport
+</span><span class="cm"> */</span>
+<span class="nd">@Repository</span>
+<span class="kd">public</span> <span class="kd">abstract</span> <span class="kd">class</span> <span class="nc">Querydsl4RepositorySupport</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="n">Class</span> <span class="n">domainClass</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">Querydsl</span> <span class="n">querydsl</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">EntityManager</span> <span class="n">entityManager</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="n">JPAQueryFactory</span> <span class="n">queryFactory</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nf">Querydsl4RepositorySupport</span><span class="o">(</span><span class="n">Class</span><span class="o">&lt;?&gt;</span> <span class="n">domainClass</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="n">Assert</span><span class="o">.</span><span class="na">notNull</span><span class="o">(</span><span class="n">domainClass</span><span class="o">,</span> <span class="s">&#34;Domain class must not be null!&#34;</span><span class="o">);</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">domainClass</span> <span class="o">=</span> <span class="n">domainClass</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="nd">@Autowired</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">setEntityManager</span><span class="o">(</span><span class="n">EntityManager</span> <span class="n">entityManager</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">Assert</span><span class="o">.</span><span class="na">notNull</span><span class="o">(</span><span class="n">entityManager</span><span class="o">,</span> <span class="s">&#34;EntityManager must not be null!&#34;</span><span class="o">);</span>
+
+        <span class="n">JpaEntityInformation</span> <span class="n">entityInformation</span> <span class="o">=</span> <span class="n">JpaEntityInformationSupport</span><span class="o">.</span><span class="na">getEntityInformation</span><span class="o">(</span><span class="n">domainClass</span><span class="o">,</span> <span class="n">entityManager</span><span class="o">);</span>
+        <span class="n">SimpleEntityPathResolver</span> <span class="n">resolver</span> <span class="o">=</span> <span class="n">SimpleEntityPathResolver</span><span class="o">.</span><span class="na">INSTANCE</span><span class="o">;</span>
+        <span class="n">EntityPath</span> <span class="n">path</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="na">createPath</span><span class="o">(</span><span class="n">entityInformation</span><span class="o">.</span><span class="na">getJavaType</span><span class="o">());</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">entityManager</span> <span class="o">=</span> <span class="n">entityManager</span><span class="o">;</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">querydsl</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Querydsl</span><span class="o">(</span><span class="n">entityManager</span><span class="o">,</span> <span class="k">new</span> <span class="n">PathBuilder</span><span class="o">&lt;&gt;(</span><span class="n">path</span><span class="o">.</span><span class="na">getType</span><span class="o">(),</span> <span class="n">path</span><span class="o">.</span><span class="na">getMetadata</span><span class="o">()));</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">queryFactory</span> <span class="o">=</span> <span class="k">new</span> <span class="n">JPAQueryFactory</span><span class="o">(</span><span class="n">entityManager</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="nd">@PostConstruct</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">validate</span><span class="o">()</span> <span class="o">{</span>
+        <span class="n">Assert</span><span class="o">.</span><span class="na">notNull</span><span class="o">(</span><span class="n">entityManager</span><span class="o">,</span> <span class="s">&#34;EntityManager must not be null!&#34;</span><span class="o">);</span>
+        <span class="n">Assert</span><span class="o">.</span><span class="na">notNull</span><span class="o">(</span><span class="n">querydsl</span><span class="o">,</span> <span class="s">&#34;Querydsl must not be null!&#34;</span><span class="o">);</span>
+        <span class="n">Assert</span><span class="o">.</span><span class="na">notNull</span><span class="o">(</span><span class="n">queryFactory</span><span class="o">,</span> <span class="s">&#34;QueryFactory must not be null!&#34;</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">protected</span> <span class="n">JPAQueryFactory</span> <span class="nf">getQueryFactory</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">queryFactory</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">protected</span> <span class="n">Querydsl</span> <span class="nf">getQuerydsl</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">querydsl</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">protected</span> <span class="n">EntityManager</span> <span class="nf">getEntityManager</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">entityManager</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">protected</span> <span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">JPAQuery</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="nf">select</span><span class="o">(</span><span class="n">Expression</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">expr</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">getQueryFactory</span><span class="o">().</span><span class="na">select</span><span class="o">(</span><span class="n">expr</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">protected</span> <span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">JPAQuery</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="nf">selectFrom</span><span class="o">(</span><span class="n">EntityPath</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">from</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">getQueryFactory</span><span class="o">().</span><span class="na">selectFrom</span><span class="o">(</span><span class="n">from</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">protected</span> <span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="nf">applyPagination</span><span class="o">(</span><span class="n">Pageable</span> <span class="n">pageable</span><span class="o">,</span> <span class="n">Function</span><span class="o">&lt;</span><span class="n">JPAQueryFactory</span><span class="o">,</span> <span class="n">JPAQuery</span><span class="o">&gt;</span> <span class="n">contentQuery</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">JPAQuery</span> <span class="n">jpaQuery</span> <span class="o">=</span> <span class="n">contentQuery</span><span class="o">.</span><span class="na">apply</span><span class="o">(</span><span class="n">getQueryFactory</span><span class="o">());</span>
+        <span class="n">List</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">content</span> <span class="o">=</span> <span class="n">getQuerydsl</span><span class="o">().</span><span class="na">applyPagination</span><span class="o">(</span><span class="n">pageable</span><span class="o">,</span> <span class="n">jpaQuery</span><span class="o">).</span><span class="na">fetch</span><span class="o">();</span>
+        <span class="k">return</span> <span class="n">PageableExecutionUtils</span><span class="o">.</span><span class="na">getPage</span><span class="o">(</span><span class="n">content</span><span class="o">,</span> <span class="n">pageable</span><span class="o">,</span> <span class="n">jpaQuery</span><span class="o">::</span><span class="n">fetchCount</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">protected</span> <span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="nf">applyPagination</span><span class="o">(</span><span class="n">Pageable</span> <span class="n">pageable</span><span class="o">,</span> <span class="n">Function</span><span class="o">&lt;</span><span class="n">JPAQueryFactory</span><span class="o">,</span> <span class="n">JPAQuery</span><span class="o">&gt;</span> <span class="n">contentQuery</span><span class="o">,</span> <span class="n">Function</span><span class="o">&lt;</span><span class="n">JPAQueryFactory</span><span class="o">,</span> <span class="n">JPAQuery</span><span class="o">&gt;</span> <span class="n">countQuery</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="n">JPAQuery</span> <span class="n">jpaContentQuery</span> <span class="o">=</span> <span class="n">contentQuery</span><span class="o">.</span><span class="na">apply</span><span class="o">(</span><span class="n">getQueryFactory</span><span class="o">());</span>
+        <span class="n">List</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="n">content</span> <span class="o">=</span> <span class="n">getQuerydsl</span><span class="o">().</span><span class="na">applyPagination</span><span class="o">(</span><span class="n">pageable</span><span class="o">,</span> <span class="n">jpaContentQuery</span><span class="o">).</span><span class="na">fetch</span><span class="o">();</span>
+        <span class="n">JPAQuery</span> <span class="n">countResult</span> <span class="o">=</span> <span class="n">countQuery</span><span class="o">.</span><span class="na">apply</span><span class="o">(</span><span class="n">getQueryFactory</span><span class="o">());</span>
+        <span class="k">return</span> <span class="n">PageableExecutionUtils</span><span class="o">.</span><span class="na">getPage</span><span class="o">(</span><span class="n">content</span><span class="o">,</span> <span class="n">pageable</span><span class="o">,</span> <span class="n">countResult</span><span class="o">::</span><span class="n">fetchCount</span><span class="o">);</span>
+    <span class="o">}</span>
+
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h3 id="querydsl4repositorysupport-사용-코드">Querydsl4RepositorySupport 사용 코드</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Repository</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberTestRepository</span> <span class="kd">extends</span> <span class="n">Querydsl4RepositorySupport</span> <span class="o">{</span>
+
+    <span class="kd">public</span> <span class="nf">MemberTestRepository</span><span class="o">()</span> <span class="o">{</span>
+        <span class="kd">super</span><span class="o">(</span><span class="n">Member</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">basicSelect</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">select</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">basicSelectFrom</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">selectFrom</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">searchPageByApplyPage</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">JPAQuery</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">query</span> <span class="o">=</span> <span class="n">selectFrom</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">team</span><span class="o">,</span> <span class="n">team</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                        <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                        <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                        <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">())</span>
+                <span class="o">);</span>
+
+        <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">content</span> <span class="o">=</span> <span class="n">getQuerydsl</span><span class="o">().</span><span class="na">applyPagination</span><span class="o">(</span><span class="n">pageable</span><span class="o">,</span> <span class="n">query</span><span class="o">).</span><span class="na">fetch</span><span class="o">();</span>
+
+        <span class="k">return</span> <span class="n">PageableExecutionUtils</span><span class="o">.</span><span class="na">getPage</span><span class="o">(</span><span class="n">content</span><span class="o">,</span> <span class="n">pageable</span><span class="o">,</span> <span class="n">query</span><span class="o">::</span><span class="n">fetchCount</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">applyPagination</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="k">return</span> <span class="n">applyPagination</span><span class="o">(</span><span class="n">pageable</span><span class="o">,</span> <span class="n">query</span> <span class="o">-&gt;</span> <span class="n">query</span>
+                        <span class="o">.</span><span class="na">selectFrom</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                        <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                                <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                                <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                                <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">())</span>
+                        <span class="o">)</span>
+        <span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">applyPagination2</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="k">return</span> <span class="n">applyPagination</span><span class="o">(</span><span class="n">pageable</span><span class="o">,</span> <span class="n">contentQuery</span> <span class="o">-&gt;</span> <span class="n">contentQuery</span>
+                <span class="o">.</span><span class="na">selectFrom</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">team</span><span class="o">,</span> <span class="n">team</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                        <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                        <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                        <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">())</span>
+
+                <span class="o">),</span> <span class="n">countQuery</span> <span class="o">-&gt;</span> <span class="n">countQuery</span>
+                <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">id</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">team</span><span class="o">,</span> <span class="n">team</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                        <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                        <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                        <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">()))</span>
+        <span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">usernameEq</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">hasText</span><span class="o">(</span><span class="n">username</span><span class="o">)</span> <span class="o">?</span> <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="n">username</span><span class="o">)</span> <span class="o">:</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">teamNameEq</span><span class="o">(</span><span class="n">String</span> <span class="n">teamName</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">hasText</span><span class="o">(</span><span class="n">teamName</span><span class="o">)</span> <span class="o">?</span> <span class="n">team</span><span class="o">.</span><span class="na">name</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="n">teamName</span><span class="o">)</span> <span class="o">:</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">ageGoe</span><span class="o">(</span><span class="n">Integer</span> <span class="n">ageGoe</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">ageGoe</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">goe</span><span class="o">(</span><span class="n">ageGoe</span><span class="o">)</span> <span class="o">:</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">ageLoe</span><span class="o">(</span><span class="n">Integer</span> <span class="n">ageLoe</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">ageLoe</span> <span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">loe</span><span class="o">(</span><span class="n">ageLoe</span><span class="o">)</span> <span class="o">:</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2022-01-01</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-with-querydsl/" data-title="Spring Data JPA가 제공하는 QueryDSL" data-hashtags="QueryDSL"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-with-querydsl/" data-hashtag="QueryDSL"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-with-querydsl/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-with-querydsl/" data-title="Spring Data JPA가 제공하는 QueryDSL" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/querydsl/">QueryDSL</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/spring-data-jpa-and-querydsl/" class="prev" rel="prev" title="Spring Data JPA와 QueryDSL"><i class="fas fa-angle-left fa-fw"></i>Spring Data JPA와 QueryDSL</a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noodp" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
+        <title>Spring Data JPA와 QueryDSL - 📚 | Dev Blog</title><meta name="Description" content=""><meta property="og:title" content="Spring Data JPA와 QueryDSL" />
+<meta property="og:description" content="스프링 데이터 JPA 리포지토리로 변경 스프링 데이터 JPA - MemberRepository 생성 package study.querydsl.repository; import org.springframework.data.jpa.repository.JpaRepository; import study.querydsl.entity.Member; import java.util.List; public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { // select m from m where m.username = ?;  List&lt;Member&gt; findByUsername(String username); } 
+스프링 데이터 JPA 테스트 @Test public void basicTest() throws Exception { Member member = new Member(&#34;member1&#34;, 10); memberRepository.save(member); Member findMember = memberRepository.findById(member.getId()).get(); assertThat(findMember).isEqualTo(member); List&lt;Member&gt; result1 = memberRepository.findAll(); assertThat(result1).containsExactly(member); List&lt;Member&gt; result2 = memberRepository.findByUsername(&#34;member1&#34;); assertThat(result2).containsExactly(member); }  QueryDSL 전용 기능인 회원 search를 작성할 수없다. → 사용자 정의 리포지토리 필요  사용자 정의 리포지토리 사용자 정의 리포지토리 사용법
+ 사용자 정의 인터페이스 작성 사용자 정의 인터페이스 구현 스프링 데이터 리포지토리에 사용자 정의 인터페이스 상속  사용자 정의 리포지토리 구성 1. 사용자 정의 인터페이스 작성 public interface MemberRepositoryCustom { List&lt;Member&gt; findMemberCustom(); } 
+2. 사용자 정의 인터페이스 구현 public class MemberRepositoryImpl implements MemberRepositoryCustom{ @Override public List&lt;Member&gt; findMemberCustom() { return null; } private final JPAQueryFactory queryFactory; public MemberRepositoryImpl(JPAQueryFactory queryFactory) { this.queryFactory = queryFactory; } @Override public List&lt;MemberTeamDto&gt; search(MemberSearchCondition condition) { return queryFactory .select(new QMemberTeamDto( member.id.as(&#34;memberId&#34;), member.username, member.age, team.id.as(&#34;teamId&#34;), team.name.as(&#34;teamName&#34;) )) .from(member) .leftJoin(member.team, team) .where( usernameEq(condition.getUsername()), teamNameEq(condition.getTeamName()), ageGoe(condition.getAgeGoe()), ageLoe(condition.getAgeLoe()) ) .fetch(); } private BooleanExpression usernameEq(String username) { return isEmpty(username)?null:member.username.eq(username); } private BooleanExpression teamNameEq(String teamName) { return hasText(teamName) ? team.name.eq(teamName):null; } private BooleanExpression ageGoe(Integer ageGoe) { return ageGoe!= null ? member.age.goe(ageGoe):null; } private BooleanExpression ageLoe(Integer ageLoe) { return ageLoe!= null ? member.age.loe(ageLoe):null; } } 
+3. 스프링 데이터 리포지토리에 사용자 정의 인터페이스 상속 public interface MemberRepository extends JpaRepository&lt;Member, Long&gt;, MemberRepositoryCustom { // select m from Member m where m.username = ?;  List&lt;Member&gt; findByUsername(String username); } 
+사용자 정의 리포지토리 테스트 코드 작성 @Test public void searchTest() { Team teamA = new Team(&#34;teamA&#34;); Team teamB = new Team(&#34;teamB&#34;); em.persist(teamA); em.persist(teamB); Member member1 = new Member(&#34;member1&#34;, 10, teamA); Member member2 = new Member(&#34;member2&#34;, 20, teamA); Member member3 = new Member(&#34;member3&#34;, 30, teamB); Member member4 = new Member(&#34;member4&#34;, 40, teamB); em.persist(member1); em.persist(member2); em.persist(member3); em.persist(member4); MemberSearchCondition condition = new MemberSearchCondition(); condition.setAgeGoe(35); condition.setAgeLoe(40); condition.setTeamName(&#34;teamB&#34;); List&lt;MemberTeamDto&gt; result = memberRepository.search(condition); assertThat(result).extracting(&#34;username&#34;).containsExactly(&#34;member4&#34;); } 
+스프링 데이터 페이징 활용 1 - Querydsl 페이징 연동  스프링 데이터의 Page, Pageable을 활용해보자. 전체 카운트를 한번에 조회하는 단순한 방법 데이터 내용과 전체 카운트를 별도로 조회하는 방법  사용자 정의 인터페이스에 페이징 2가지 추가 public interface MemberRepositoryCustom { List&lt;MemberTeamDto&gt; search(MemberSearchCondition condition); Page&lt;MemberTeamDto&gt; searchPageSimple(MemberSearchCondition condition, Pageable pageable); Page&lt;MemberTeamDto&gt; searchPageComplex(MemberSearchCondition condition, Pageable pageable); } 
+전체 카운트를 한번에 조회하는 단순한 방법 - searchPageSimple() @Override public Page&lt;MemberTeamDto&gt; searchPageSimple(MemberSearchCondition condition, Pageable pageable) { QueryResults&lt;MemberTeamDto&gt; results = queryFactory .select(new QMemberTeamDto( member.id.as(&#34;memberId&#34;), member.username, member.age, team.id.as(&#34;teamId&#34;), team.name.as(&#34;teamName&#34;) )) .from(member) .leftJoin(member.team, team) .where( usernameEq(condition.getUsername()), teamNameEq(condition.getTeamName()), ageGoe(condition.getAgeGoe()), ageLoe(condition.getAgeLoe()) ) .offset(pageable.getOffset()) // 몇번째부터 시작할 것인가  .limit(pageable.getPageSize()) // 몇개를 가져올 것인가  .fetchResults(); List&lt;MemberTeamDto&gt; content = results.getResults(); long totalCount = results.getTotal(); return new PageImpl&lt;&gt;(content, pageable, totalCount); }  Querydsl이 제공하는 fetchResults() 를 사용하면 내용과 전체 카운트를 한번에 조회할 수 있다. (실제 쿼리는 2번 호출) fetchResult() 는 쿼리 카운트 쿼리 실행시 필요없는 order by 는 제거한다.  테스트 코드 작성 @Test public void searchPageSimple() throws Exception { Team teamA = new Team(&#34;teamA&#34;); Team teamB = new Team(&#34;teamB&#34;); em.persist(teamA); em.persist(teamB); Member member1 = new Member(&#34;member1&#34;, 10, teamA); Member member2 = new Member(&#34;member2&#34;, 20, teamA); Member member3 = new Member(&#34;member3&#34;, 30, teamB); Member member4 = new Member(&#34;member4&#34;, 40, teamB); em." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jaeyeonme.github.io/posts/spring-data-jpa-and-querydsl/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2022-01-01T09:00:00+00:00" />
+<meta property="article:modified_time" content="2022-01-01T09:00:00+00:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Spring Data JPA와 QueryDSL"/>
+<meta name="twitter:description" content="스프링 데이터 JPA 리포지토리로 변경 스프링 데이터 JPA - MemberRepository 생성 package study.querydsl.repository; import org.springframework.data.jpa.repository.JpaRepository; import study.querydsl.entity.Member; import java.util.List; public interface MemberRepository extends JpaRepository&lt;Member, Long&gt; { // select m from m where m.username = ?;  List&lt;Member&gt; findByUsername(String username); } 
+스프링 데이터 JPA 테스트 @Test public void basicTest() throws Exception { Member member = new Member(&#34;member1&#34;, 10); memberRepository.save(member); Member findMember = memberRepository.findById(member.getId()).get(); assertThat(findMember).isEqualTo(member); List&lt;Member&gt; result1 = memberRepository.findAll(); assertThat(result1).containsExactly(member); List&lt;Member&gt; result2 = memberRepository.findByUsername(&#34;member1&#34;); assertThat(result2).containsExactly(member); }  QueryDSL 전용 기능인 회원 search를 작성할 수없다. → 사용자 정의 리포지토리 필요  사용자 정의 리포지토리 사용자 정의 리포지토리 사용법
+ 사용자 정의 인터페이스 작성 사용자 정의 인터페이스 구현 스프링 데이터 리포지토리에 사용자 정의 인터페이스 상속  사용자 정의 리포지토리 구성 1. 사용자 정의 인터페이스 작성 public interface MemberRepositoryCustom { List&lt;Member&gt; findMemberCustom(); } 
+2. 사용자 정의 인터페이스 구현 public class MemberRepositoryImpl implements MemberRepositoryCustom{ @Override public List&lt;Member&gt; findMemberCustom() { return null; } private final JPAQueryFactory queryFactory; public MemberRepositoryImpl(JPAQueryFactory queryFactory) { this.queryFactory = queryFactory; } @Override public List&lt;MemberTeamDto&gt; search(MemberSearchCondition condition) { return queryFactory .select(new QMemberTeamDto( member.id.as(&#34;memberId&#34;), member.username, member.age, team.id.as(&#34;teamId&#34;), team.name.as(&#34;teamName&#34;) )) .from(member) .leftJoin(member.team, team) .where( usernameEq(condition.getUsername()), teamNameEq(condition.getTeamName()), ageGoe(condition.getAgeGoe()), ageLoe(condition.getAgeLoe()) ) .fetch(); } private BooleanExpression usernameEq(String username) { return isEmpty(username)?null:member.username.eq(username); } private BooleanExpression teamNameEq(String teamName) { return hasText(teamName) ? team.name.eq(teamName):null; } private BooleanExpression ageGoe(Integer ageGoe) { return ageGoe!= null ? member.age.goe(ageGoe):null; } private BooleanExpression ageLoe(Integer ageLoe) { return ageLoe!= null ? member.age.loe(ageLoe):null; } } 
+3. 스프링 데이터 리포지토리에 사용자 정의 인터페이스 상속 public interface MemberRepository extends JpaRepository&lt;Member, Long&gt;, MemberRepositoryCustom { // select m from Member m where m.username = ?;  List&lt;Member&gt; findByUsername(String username); } 
+사용자 정의 리포지토리 테스트 코드 작성 @Test public void searchTest() { Team teamA = new Team(&#34;teamA&#34;); Team teamB = new Team(&#34;teamB&#34;); em.persist(teamA); em.persist(teamB); Member member1 = new Member(&#34;member1&#34;, 10, teamA); Member member2 = new Member(&#34;member2&#34;, 20, teamA); Member member3 = new Member(&#34;member3&#34;, 30, teamB); Member member4 = new Member(&#34;member4&#34;, 40, teamB); em.persist(member1); em.persist(member2); em.persist(member3); em.persist(member4); MemberSearchCondition condition = new MemberSearchCondition(); condition.setAgeGoe(35); condition.setAgeLoe(40); condition.setTeamName(&#34;teamB&#34;); List&lt;MemberTeamDto&gt; result = memberRepository.search(condition); assertThat(result).extracting(&#34;username&#34;).containsExactly(&#34;member4&#34;); } 
+스프링 데이터 페이징 활용 1 - Querydsl 페이징 연동  스프링 데이터의 Page, Pageable을 활용해보자. 전체 카운트를 한번에 조회하는 단순한 방법 데이터 내용과 전체 카운트를 별도로 조회하는 방법  사용자 정의 인터페이스에 페이징 2가지 추가 public interface MemberRepositoryCustom { List&lt;MemberTeamDto&gt; search(MemberSearchCondition condition); Page&lt;MemberTeamDto&gt; searchPageSimple(MemberSearchCondition condition, Pageable pageable); Page&lt;MemberTeamDto&gt; searchPageComplex(MemberSearchCondition condition, Pageable pageable); } 
+전체 카운트를 한번에 조회하는 단순한 방법 - searchPageSimple() @Override public Page&lt;MemberTeamDto&gt; searchPageSimple(MemberSearchCondition condition, Pageable pageable) { QueryResults&lt;MemberTeamDto&gt; results = queryFactory .select(new QMemberTeamDto( member.id.as(&#34;memberId&#34;), member.username, member.age, team.id.as(&#34;teamId&#34;), team.name.as(&#34;teamName&#34;) )) .from(member) .leftJoin(member.team, team) .where( usernameEq(condition.getUsername()), teamNameEq(condition.getTeamName()), ageGoe(condition.getAgeGoe()), ageLoe(condition.getAgeLoe()) ) .offset(pageable.getOffset()) // 몇번째부터 시작할 것인가  .limit(pageable.getPageSize()) // 몇개를 가져올 것인가  .fetchResults(); List&lt;MemberTeamDto&gt; content = results.getResults(); long totalCount = results.getTotal(); return new PageImpl&lt;&gt;(content, pageable, totalCount); }  Querydsl이 제공하는 fetchResults() 를 사용하면 내용과 전체 카운트를 한번에 조회할 수 있다. (실제 쿼리는 2번 호출) fetchResult() 는 쿼리 카운트 쿼리 실행시 필요없는 order by 는 제거한다.  테스트 코드 작성 @Test public void searchPageSimple() throws Exception { Team teamA = new Team(&#34;teamA&#34;); Team teamB = new Team(&#34;teamB&#34;); em.persist(teamA); em.persist(teamB); Member member1 = new Member(&#34;member1&#34;, 10, teamA); Member member2 = new Member(&#34;member2&#34;, 20, teamA); Member member3 = new Member(&#34;member3&#34;, 30, teamB); Member member4 = new Member(&#34;member4&#34;, 40, teamB); em."/>
+<meta name="application-name" content="📚 | Dev Blog">
+<meta name="apple-mobile-web-app-title" content="📚 | Dev Blog"><link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><link rel="canonical" href="https://jaeyeonme.github.io/posts/spring-data-jpa-and-querydsl/" /><link rel="prev" href="https://jaeyeonme.github.io/posts/jpa-and-querydsl/" /><link rel="next" href="https://jaeyeonme.github.io/posts/spring-data-jpa-with-querydsl/" /><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"><link rel="stylesheet" href="/css/style.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css"><script type="application/ld+json">
+    {
+        "@context": "http://schema.org",
+        "@type": "BlogPosting",
+        "headline": "Spring Data JPA와 QueryDSL",
+        "inLanguage": "en",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https:\/\/jaeyeonme.github.io\/posts\/spring-data-jpa-and-querydsl\/"
+        },"genre": "posts","keywords": "QueryDSL","wordcount":  838 ,
+        "url": "https:\/\/jaeyeonme.github.io\/posts\/spring-data-jpa-and-querydsl\/","datePublished": "2022-01-01T09:00:00+00:00","dateModified": "2022-01-01T09:00:00+00:00","publisher": {
+            "@type": "Organization",
+            "name": "Jaeyeon"},"author": {
+                "@type": "Person",
+                "name": "Jaeyeon"
+            },"description": ""
+    }
+    </script></head>
+    <body header-desktop="auto" header-mobile="auto"><script type="text/javascript">(window.localStorage && localStorage.getItem('theme') ? localStorage.getItem('theme') === 'dark' : ('auto' === 'auto' ? window.matchMedia('(prefers-color-scheme: dark)').matches : 'auto' === 'dark')) && document.body.setAttribute('theme', 'dark');</script>
+
+        <div id="mask"></div><div class="wrapper"><header class="desktop" id="header-desktop">
+    <div class="header-wrapper">
+        <div class="header-title">
+            <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+        </div>
+        <div class="menu">
+            <div class="menu-inner"><a class="menu-item" href="/posts/"> Posts </a><a class="menu-item" href="/tags/"> Tags </a><a class="menu-item" href="/categories/"> Categories </a><span class="menu-item delimiter"></span><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                    <i class="fas fa-adjust fa-fw"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</header><header class="mobile" id="header-mobile">
+    <div class="header-container">
+        <div class="header-wrapper">
+            <div class="header-title">
+                <a href="/" title="📚 | Dev Blog">📚 | Dev Blog</a>
+            </div>
+            <div class="menu-toggle" id="menu-toggle-mobile">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+        <div class="menu" id="menu-mobile"><a class="menu-item" href="/posts/" title="">Posts</a><a class="menu-item" href="/tags/" title="">Tags</a><a class="menu-item" href="/categories/" title="">Categories</a><a href="javascript:void(0);" class="menu-item theme-switch" title="Switch Theme">
+                <i class="fas fa-adjust fa-fw"></i>
+            </a></div>
+    </div>
+</header>
+<div class="search-dropdown desktop">
+    <div id="search-dropdown-desktop"></div>
+</div>
+<div class="search-dropdown mobile">
+    <div id="search-dropdown-mobile"></div>
+</div>
+<main class="main">
+                <div class="container"><div class="toc" id="toc-auto">
+            <h2 class="toc-title">Contents</h2>
+            <div class="toc-content" id="toc-content-auto"></div>
+        </div><article class="page single"><h1 class="single-title animated flipInX">Spring Data JPA와 QueryDSL</h1><div class="post-meta">
+            <div class="post-meta-line"><span class="post-author"><a href="/" title="Author" rel=" author" class="author"><i class="fas fa-user-circle fa-fw"></i>Jaeyeon</a></span>&nbsp;<span class="post-category">included in <a href="/categories/querydsl/"><i class="far fa-folder fa-fw"></i>QueryDSL</a></span></div>
+            <div class="post-meta-line"><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime="2022-01-01">2022-01-01</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;838 words&nbsp;
+                <i class="far fa-clock fa-fw"></i>&nbsp;4 minutes&nbsp;</div>
+        </div><div class="featured-image"><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="/images/JPA/querydsl.png"
+        data-srcset="/images/JPA/querydsl.png, /images/JPA/querydsl.png 1.5x, /images/JPA/querydsl.png 2x"
+        data-sizes="auto"
+        alt="/images/JPA/querydsl.png"
+        title="/images/JPA/querydsl.png" /></div><div class="details toc" id="toc-static"  kept="">
+                <div class="details-summary toc-title">
+                    <span>Contents</span>
+                    <span><i class="details-icon fas fa-angle-right"></i></span>
+                </div>
+                <div class="details-content toc-content" id="toc-content-static"><nav id="TableOfContents">
+  <ul>
+    <li><a href="#스프링-데이터-jpa-리포지토리로-변경">스프링 데이터 JPA 리포지토리로 변경</a>
+      <ul>
+        <li><a href="#스프링-데이터-jpa---memberrepository-생성">스프링 데이터 JPA - MemberRepository 생성</a></li>
+        <li><a href="#스프링-데이터-jpa-테스트">스프링 데이터 JPA 테스트</a></li>
+      </ul>
+    </li>
+    <li><a href="#사용자-정의-리포지토리">사용자 정의 리포지토리</a>
+      <ul>
+        <li><a href="#사용자-정의-리포지토리-구성">사용자 정의 리포지토리 구성</a></li>
+        <li><a href="#1-사용자-정의-인터페이스-작성">1. 사용자 정의 인터페이스 작성</a></li>
+        <li><a href="#2-사용자-정의-인터페이스-구현">2. 사용자 정의 인터페이스 구현</a></li>
+        <li><a href="#3-스프링-데이터-리포지토리에-사용자-정의-인터페이스-상속">3. 스프링 데이터 리포지토리에 사용자 정의 인터페이스 상속</a></li>
+        <li><a href="#사용자-정의-리포지토리-테스트-코드-작성"><strong>사용자 정의 리포지토리 테스트 코드 작성</strong></a></li>
+      </ul>
+    </li>
+    <li><a href="#스프링-데이터-페이징-활용-1---querydsl-페이징-연동">스프링 데이터 페이징 활용 1 - Querydsl 페이징 연동</a>
+      <ul>
+        <li><a href="#사용자-정의-인터페이스에-페이징-2가지-추가">사용자 정의 인터페이스에 페이징 2가지 추가</a></li>
+        <li><a href="#전체-카운트를-한번에-조회하는-단순한-방법---searchpagesimple">전체 카운트를 한번에 조회하는 단순한 방법 - searchPageSimple()</a></li>
+        <li><a href="#테스트-코드-작성">테스트 코드 작성</a></li>
+        <li><a href="#데이터-내용과-전체-카운트를-별도로-조회하는-방법---searchpagecomplex">데이터 내용과 전체 카운트를 별도로 조회하는 방법 - <strong>searchPageComplex()</strong></a></li>
+      </ul>
+    </li>
+    <li><a href="#스프링-데이터-페이징-활용-2---countquery-최적화">스프링 데이터 페이징 활용 2 - CountQuery 최적화</a>
+      <ul>
+        <li><a href="#pageableexecutionutilsgetpage로-최적화">PageableExecutionUtils.getPage()로 최적화</a></li>
+      </ul>
+    </li>
+    <li><a href="#스프링-데이터-페이징-활용3---컨트롤러-개발">스프링 데이터 페이징 활용3 - 컨트롤러 개발</a>
+      <ul>
+        <li><a href="#controller-api작성">Controller API작성</a></li>
+        <li><a href="#스프링-데이터-정렬sort"><strong>스프링 데이터 정렬(Sort)</strong></a></li>
+      </ul>
+    </li>
+  </ul>
+</nav></div>
+            </div><div class="content" id="content"><h2 id="스프링-데이터-jpa-리포지토리로-변경">스프링 데이터 JPA 리포지토리로 변경</h2>
+<br>
+<h3 id="스프링-데이터-jpa---memberrepository-생성">스프링 데이터 JPA - MemberRepository 생성</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kn">package</span> <span class="nn">study.querydsl.repository</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">org.springframework.data.jpa.repository.JpaRepository</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">study.querydsl.entity.Member</span><span class="o">;</span>
+
+<span class="kn">import</span> <span class="nn">java.util.List</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepository</span> <span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="o">{</span>
+
+    <span class="c1">// select m from m where m.username = ?;
+</span><span class="c1"></span>    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<h3 id="스프링-데이터-jpa-테스트">스프링 데이터 JPA 테스트</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">basicTest</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span> <span class="o">{</span>
+    <span class="n">Member</span> <span class="n">member</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">);</span>
+    <span class="n">memberRepository</span><span class="o">.</span><span class="na">save</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+    <span class="n">Member</span> <span class="n">findMember</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findById</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">getId</span><span class="o">()).</span><span class="na">get</span><span class="o">();</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">findMember</span><span class="o">).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">result1</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findAll</span><span class="o">();</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result1</span><span class="o">).</span><span class="na">containsExactly</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">result2</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">findByUsername</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result2</span><span class="o">).</span><span class="na">containsExactly</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>QueryDSL 전용 기능인 회원 search를 작성할 수없다. → 사용자 정의 리포지토리 필요</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="사용자-정의-리포지토리">사용자 정의 리포지토리</h2>
+<p><strong>사용자 정의 리포지토리 사용법</strong></p>
+<ol>
+<li>사용자 정의 인터페이스 작성</li>
+<li>사용자 정의 인터페이스 구현</li>
+<li>스프링 데이터 리포지토리에 사용자 정의 인터페이스 상속</li>
+</ol>
+<br>
+<br>
+<h3 id="사용자-정의-리포지토리-구성">사용자 정의 리포지토리 구성</h3>
+<p><img
+        class="lazyload"
+        src="/svg/loading.min.svg"
+        data-src="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2047.png"
+        data-srcset="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2047.png, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2047.png 1.5x, https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2047.png 2x"
+        data-sizes="auto"
+        alt="https://cdn.jsdelivr.net/gh/jaeyeonme/blog@main/static/images/JPA/Untitled%2047.png"
+        title="picture" /></p>
+<br>
+<br>
+<h3 id="1-사용자-정의-인터페이스-작성">1. 사용자 정의 인터페이스 작성</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepositoryCustom</span> <span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberCustom</span><span class="o">();</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h3 id="2-사용자-정의-인터페이스-구현">2. 사용자 정의 인터페이스 구현</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberRepositoryImpl</span> <span class="kd">implements</span> <span class="n">MemberRepositoryCustom</span><span class="o">{</span>
+
+    <span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findMemberCustom</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="n">JPAQueryFactory</span> <span class="n">queryFactory</span><span class="o">;</span>
+
+    <span class="kd">public</span> <span class="nf">MemberRepositoryImpl</span><span class="o">(</span><span class="n">JPAQueryFactory</span> <span class="n">queryFactory</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">queryFactory</span> <span class="o">=</span> <span class="n">queryFactory</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">search</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">queryFactory</span>
+                <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="k">new</span> <span class="n">QMemberTeamDto</span><span class="o">(</span>
+                        <span class="n">member</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;memberId&#34;</span><span class="o">),</span>
+                        <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span>
+                        <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">,</span>
+                        <span class="n">team</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;teamId&#34;</span><span class="o">),</span>
+                        <span class="n">team</span><span class="o">.</span><span class="na">name</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;teamName&#34;</span><span class="o">)</span>
+                <span class="o">))</span>
+                <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">team</span><span class="o">,</span> <span class="n">team</span><span class="o">)</span>
+                <span class="o">.</span><span class="na">where</span><span class="o">(</span>
+                        <span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                        <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                        <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                        <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">())</span>
+                <span class="o">)</span>
+                <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">usernameEq</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">isEmpty</span><span class="o">(</span><span class="n">username</span><span class="o">)?</span><span class="kc">null</span><span class="o">:</span><span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="n">username</span><span class="o">);</span>
+    <span class="o">}</span>
+    <span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">teamNameEq</span><span class="o">(</span><span class="n">String</span> <span class="n">teamName</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">hasText</span><span class="o">(</span><span class="n">teamName</span><span class="o">)</span> <span class="o">?</span> <span class="n">team</span><span class="o">.</span><span class="na">name</span><span class="o">.</span><span class="na">eq</span><span class="o">(</span><span class="n">teamName</span><span class="o">):</span><span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">ageGoe</span><span class="o">(</span><span class="n">Integer</span> <span class="n">ageGoe</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">ageGoe</span><span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">goe</span><span class="o">(</span><span class="n">ageGoe</span><span class="o">):</span><span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="n">BooleanExpression</span> <span class="nf">ageLoe</span><span class="o">(</span><span class="n">Integer</span> <span class="n">ageLoe</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">ageLoe</span><span class="o">!=</span> <span class="kc">null</span> <span class="o">?</span> <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">.</span><span class="na">loe</span><span class="o">(</span><span class="n">ageLoe</span><span class="o">):</span><span class="kc">null</span><span class="o">;</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h3 id="3-스프링-데이터-리포지토리에-사용자-정의-인터페이스-상속">3. 스프링 데이터 리포지토리에 사용자 정의 인터페이스 상속</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepository</span> <span class="kd">extends</span> <span class="n">JpaRepository</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;,</span> <span class="n">MemberRepositoryCustom</span> <span class="o">{</span>
+
+    <span class="c1">// select m from Member m where m.username = ?;
+</span><span class="c1"></span>    <span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="nf">findByUsername</span><span class="o">(</span><span class="n">String</span> <span class="n">username</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h3 id="사용자-정의-리포지토리-테스트-코드-작성"><strong>사용자 정의 리포지토리 테스트 코드 작성</strong></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">searchTest</span><span class="o">()</span> <span class="o">{</span>
+    <span class="n">Team</span> <span class="n">teamA</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Team</span><span class="o">(</span><span class="s">&#34;teamA&#34;</span><span class="o">);</span>
+    <span class="n">Team</span> <span class="n">teamB</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Team</span><span class="o">(</span><span class="s">&#34;teamB&#34;</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">teamA</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">teamB</span><span class="o">);</span>
+
+    <span class="n">Member</span> <span class="n">member1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">,</span> <span class="n">teamA</span><span class="o">);</span>
+    <span class="n">Member</span> <span class="n">member2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member2&#34;</span><span class="o">,</span> <span class="n">20</span><span class="o">,</span> <span class="n">teamA</span><span class="o">);</span>
+
+    <span class="n">Member</span> <span class="n">member3</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member3&#34;</span><span class="o">,</span> <span class="n">30</span><span class="o">,</span> <span class="n">teamB</span><span class="o">);</span>
+    <span class="n">Member</span> <span class="n">member4</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member4&#34;</span><span class="o">,</span> <span class="n">40</span><span class="o">,</span> <span class="n">teamB</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member1</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member2</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member3</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member4</span><span class="o">);</span>
+
+    <span class="n">MemberSearchCondition</span> <span class="n">condition</span> <span class="o">=</span> <span class="k">new</span> <span class="n">MemberSearchCondition</span><span class="o">();</span>
+    <span class="n">condition</span><span class="o">.</span><span class="na">setAgeGoe</span><span class="o">(</span><span class="n">35</span><span class="o">);</span>
+    <span class="n">condition</span><span class="o">.</span><span class="na">setAgeLoe</span><span class="o">(</span><span class="n">40</span><span class="o">);</span>
+    <span class="n">condition</span><span class="o">.</span><span class="na">setTeamName</span><span class="o">(</span><span class="s">&#34;teamB&#34;</span><span class="o">);</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">search</span><span class="o">(</span><span class="n">condition</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result</span><span class="o">).</span><span class="na">extracting</span><span class="o">(</span><span class="s">&#34;username&#34;</span><span class="o">).</span><span class="na">containsExactly</span><span class="o">(</span><span class="s">&#34;member4&#34;</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<br>
+<h2 id="스프링-데이터-페이징-활용-1---querydsl-페이징-연동">스프링 데이터 페이징 활용 1 - Querydsl 페이징 연동</h2>
+<ul>
+<li>스프링 데이터의 Page, Pageable을 활용해보자.</li>
+<li>전체 카운트를 한번에 조회하는 단순한 방법</li>
+<li>데이터 내용과 전체 카운트를 별도로 조회하는 방법</li>
+</ul>
+<br>
+<br>
+<h3 id="사용자-정의-인터페이스에-페이징-2가지-추가">사용자 정의 인터페이스에 페이징 2가지 추가</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="kd">public</span> <span class="kd">interface</span> <span class="nc">MemberRepositoryCustom</span> <span class="o">{</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">search</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">);</span>
+    <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">searchPageSimple</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">);</span>
+    <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">searchPageComplex</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h3 id="전체-카운트를-한번에-조회하는-단순한-방법---searchpagesimple">전체 카운트를 한번에 조회하는 단순한 방법 - searchPageSimple()</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Override</span>
+<span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">searchPageSimple</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">QueryResults</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="n">results</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="k">new</span> <span class="n">QMemberTeamDto</span><span class="o">(</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;memberId&#34;</span><span class="o">),</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">,</span>
+                    <span class="n">team</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;teamId&#34;</span><span class="o">),</span>
+                    <span class="n">team</span><span class="o">.</span><span class="na">name</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;teamName&#34;</span><span class="o">)</span>
+            <span class="o">))</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">team</span><span class="o">,</span> <span class="n">team</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">where</span><span class="o">(</span>
+                    <span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                    <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                    <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                    <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">())</span>
+            <span class="o">)</span>
+            <span class="o">.</span><span class="na">offset</span><span class="o">(</span><span class="n">pageable</span><span class="o">.</span><span class="na">getOffset</span><span class="o">())</span> <span class="c1">// 몇번째부터 시작할 것인가
+</span><span class="c1"></span>            <span class="o">.</span><span class="na">limit</span><span class="o">(</span><span class="n">pageable</span><span class="o">.</span><span class="na">getPageSize</span><span class="o">())</span> <span class="c1">// 몇개를 가져올 것인가
+</span><span class="c1"></span>            <span class="o">.</span><span class="na">fetchResults</span><span class="o">();</span>
+
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="n">content</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="na">getResults</span><span class="o">();</span>
+    <span class="kt">long</span> <span class="n">totalCount</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="na">getTotal</span><span class="o">();</span>
+    <span class="k">return</span> <span class="k">new</span> <span class="n">PageImpl</span><span class="o">&lt;&gt;(</span><span class="n">content</span><span class="o">,</span> <span class="n">pageable</span><span class="o">,</span> <span class="n">totalCount</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>Querydsl이 제공하는 <code>fetchResults()</code> 를 사용하면 내용과 전체 카운트를 한번에 조회할 수 있다. (실제 쿼리는 2번 호출)</li>
+<li><code>fetchResult()</code> 는 쿼리 카운트 쿼리 실행시 필요없는 <code>order by</code> 는 제거한다.</li>
+</ul>
+<br>
+<br>
+<h3 id="테스트-코드-작성">테스트 코드 작성</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Test</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">searchPageSimple</span><span class="o">()</span> <span class="kd">throws</span> <span class="n">Exception</span> <span class="o">{</span>
+    <span class="n">Team</span> <span class="n">teamA</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Team</span><span class="o">(</span><span class="s">&#34;teamA&#34;</span><span class="o">);</span>
+    <span class="n">Team</span> <span class="n">teamB</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Team</span><span class="o">(</span><span class="s">&#34;teamB&#34;</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">teamA</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">teamB</span><span class="o">);</span>
+
+    <span class="n">Member</span> <span class="n">member1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">,</span> <span class="n">10</span><span class="o">,</span> <span class="n">teamA</span><span class="o">);</span>
+    <span class="n">Member</span> <span class="n">member2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member2&#34;</span><span class="o">,</span> <span class="n">20</span><span class="o">,</span> <span class="n">teamA</span><span class="o">);</span>
+
+    <span class="n">Member</span> <span class="n">member3</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member3&#34;</span><span class="o">,</span> <span class="n">30</span><span class="o">,</span> <span class="n">teamB</span><span class="o">);</span>
+    <span class="n">Member</span> <span class="n">member4</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Member</span><span class="o">(</span><span class="s">&#34;member4&#34;</span><span class="o">,</span> <span class="n">40</span><span class="o">,</span> <span class="n">teamB</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member1</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member2</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member3</span><span class="o">);</span>
+    <span class="n">em</span><span class="o">.</span><span class="na">persist</span><span class="o">(</span><span class="n">member4</span><span class="o">);</span>
+
+    <span class="n">MemberSearchCondition</span> <span class="n">condition</span> <span class="o">=</span> <span class="k">new</span> <span class="n">MemberSearchCondition</span><span class="o">();</span>
+    <span class="n">PageRequest</span> <span class="n">pageRequest</span> <span class="o">=</span> <span class="n">PageRequest</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">0</span><span class="o">,</span> <span class="n">3</span><span class="o">);</span>
+
+    <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">searchPageSimple</span><span class="o">(</span><span class="n">condition</span><span class="o">,</span> <span class="n">pageRequest</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result</span><span class="o">.</span><span class="na">getSize</span><span class="o">()).</span><span class="na">isEqualTo</span><span class="o">(</span><span class="n">3</span><span class="o">);</span>
+    <span class="n">assertThat</span><span class="o">(</span><span class="n">result</span><span class="o">.</span><span class="na">getContent</span><span class="o">()).</span><span class="na">extracting</span><span class="o">(</span><span class="s">&#34;username&#34;</span><span class="o">).</span><span class="na">containsExactly</span><span class="o">(</span><span class="s">&#34;member1&#34;</span><span class="o">,</span> <span class="s">&#34;member2&#34;</span><span class="o">,</span> <span class="s">&#34;member3&#34;</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><br>
+<br>
+<h3 id="데이터-내용과-전체-카운트를-별도로-조회하는-방법---searchpagecomplex">데이터 내용과 전체 카운트를 별도로 조회하는 방법 - <strong>searchPageComplex()</strong></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@Override</span>
+<span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">searchPageComplex</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="n">content</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="k">new</span> <span class="n">QMemberTeamDto</span><span class="o">(</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;memberId&#34;</span><span class="o">),</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">username</span><span class="o">,</span>
+                    <span class="n">member</span><span class="o">.</span><span class="na">age</span><span class="o">,</span>
+                    <span class="n">team</span><span class="o">.</span><span class="na">id</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;teamId&#34;</span><span class="o">),</span>
+                    <span class="n">team</span><span class="o">.</span><span class="na">name</span><span class="o">.</span><span class="na">as</span><span class="o">(</span><span class="s">&#34;teamName&#34;</span><span class="o">)</span>
+            <span class="o">))</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">team</span><span class="o">,</span> <span class="n">team</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">where</span><span class="o">(</span>
+                    <span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                    <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                    <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                    <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">())</span>
+            <span class="o">)</span>
+            <span class="o">.</span><span class="na">offset</span><span class="o">(</span><span class="n">pageable</span><span class="o">.</span><span class="na">getOffset</span><span class="o">())</span>
+            <span class="o">.</span><span class="na">limit</span><span class="o">(</span><span class="n">pageable</span><span class="o">.</span><span class="na">getPageSize</span><span class="o">())</span>
+            <span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+
+    <span class="kt">long</span> <span class="n">total</span> <span class="o">=</span> <span class="n">queryFactory</span>
+            <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">team</span><span class="o">,</span> <span class="n">team</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">where</span><span class="o">(</span>
+                    <span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                    <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                    <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                    <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">())</span>
+            <span class="o">)</span>
+            <span class="o">.</span><span class="na">fetchCount</span><span class="o">();</span>
+
+    <span class="k">return</span> <span class="k">new</span> <span class="n">PageImpl</span><span class="o">&lt;&gt;(</span><span class="n">content</span><span class="o">,</span> <span class="n">pageable</span><span class="o">,</span> <span class="n">total</span><span class="o">);</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li>
+<p><code>fetch()</code> 를 사용해서 content만 가져 온다.</p>
+</li>
+<li>
+<p>totalCount는 <code>fetchCount()</code> 를 이용해서 따로 가져온다.</p>
+</li>
+<li>
+<p>이렇게 전체 카운트 조회하는 방법을 분리하면 성능 향상 효과를 기대할 수 있다.</p>
+<p>→ 조인을 줄여도 되거나, 다른곳에 몰려있거나 하는 경우 별도로 작성해서 성능 향상을 기대할 수 있다.</p>
+</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="스프링-데이터-페이징-활용-2---countquery-최적화">스프링 데이터 페이징 활용 2 - CountQuery 최적화</h2>
+<h3 id="pageableexecutionutilsgetpage로-최적화">PageableExecutionUtils.getPage()로 최적화</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">JPAQuery</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">countQuery</span> <span class="o">=</span> <span class="n">queryFactory</span>
+        <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">from</span><span class="o">(</span><span class="n">member</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">team</span><span class="o">,</span> <span class="n">team</span><span class="o">)</span>
+        <span class="o">.</span><span class="na">where</span><span class="o">(</span><span class="n">usernameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getUsername</span><span class="o">()),</span>
+                <span class="n">teamNameEq</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getTeamName</span><span class="o">()),</span>
+                <span class="n">ageGoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeGoe</span><span class="o">()),</span>
+                <span class="n">ageLoe</span><span class="o">(</span><span class="n">condition</span><span class="o">.</span><span class="na">getAgeLoe</span><span class="o">())</span>
+        <span class="o">);</span>
+
+<span class="k">return</span> <span class="n">PageableExecutionUtils</span><span class="o">.</span><span class="na">getPage</span><span class="o">(</span><span class="n">content</span><span class="o">,</span> <span class="n">pageable</span><span class="o">,</span> <span class="n">countQuery</span><span class="o">::</span><span class="n">fetchCount</span><span class="o">);</span>
+<span class="c1">//        return new PageImpl&lt;&gt;(content, pageable, total);
+</span></code></pre></div><ul>
+<li>스프링 데이터 라이브러리가 제공</li>
+<li>count 쿼리가 생략 가능한 경우 생략해서 처리
+<ul>
+<li>페이지 시작이면서 컨텐츠 사이즈가 페이지 사이즈보다 작을 때</li>
+<li>마지막 페이지 일 때 (offset + 컨텐츠 사이즈를 더해서 전체 사이즈 구함)</li>
+</ul>
+</li>
+</ul>
+<br>
+<br>
+<br>
+<h2 id="스프링-데이터-페이징-활용3---컨트롤러-개발">스프링 데이터 페이징 활용3 - 컨트롤러 개발</h2>
+<h3 id="controller-api작성">Controller API작성</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="nd">@RestController</span>
+<span class="nd">@RequiredArgsConstructor</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MemberController</span> <span class="o">{</span>
+
+    <span class="kd">private</span> <span class="kd">final</span> <span class="n">MemberJpaRepository</span> <span class="n">memberJpaRepository</span><span class="o">;</span>
+    <span class="kd">private</span> <span class="kd">final</span> <span class="n">MemberRepository</span> <span class="n">memberRepository</span><span class="o">;</span>
+
+    <span class="nd">@GetMapping</span><span class="o">(</span><span class="s">&#34;/v1/members&#34;</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="n">List</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">searchMemberV1</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">memberJpaRepository</span><span class="o">.</span><span class="na">search</span><span class="o">(</span><span class="n">condition</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="nd">@GetMapping</span><span class="o">(</span><span class="s">&#34;/v2/members&#34;</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">searchMemberV2</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">searchPageSimple</span><span class="o">(</span><span class="n">condition</span><span class="o">,</span> <span class="n">pageable</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="nd">@GetMapping</span><span class="o">(</span><span class="s">&#34;/v3/members&#34;</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="n">Page</span><span class="o">&lt;</span><span class="n">MemberTeamDto</span><span class="o">&gt;</span> <span class="nf">searchMemberV3</span><span class="o">(</span><span class="n">MemberSearchCondition</span> <span class="n">condition</span><span class="o">,</span> <span class="n">Pageable</span> <span class="n">pageable</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">memberRepository</span><span class="o">.</span><span class="na">searchPageComplex</span><span class="o">(</span><span class="n">condition</span><span class="o">,</span> <span class="n">pageable</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div><ul>
+<li><a href="http://localhost:8080/v2/members?size=5&amp;page=2" target="_blank" rel="noopener noreffer"><code>http://localhost:8080/v2/members?size=5&amp;page=2</code></a></li>
+</ul>
+<h3 id="스프링-데이터-정렬sort"><strong>스프링 데이터 정렬(Sort)</strong></h3>
+<p>스프링 데이터 JPA는 자신의 정렬(Sort)을 Querydsl의 정렬(OrderSpecifier)로 편리하게 변경하는 기능을 제공한다.</p>
+<br>
+<br>
+<p><strong>스프링 데이터 Sort를 Querydsl의 OrderSpecifier로 변환</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="n">JPAQuery</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">query</span> <span class="o">=</span> <span class="n">queryFactory</span><span class="o">.</span><span class="na">selectFrom</span><span class="o">(</span><span class="n">member</span><span class="o">);</span>
+<span class="k">for</span> <span class="o">(</span><span class="n">Sort</span><span class="o">.</span><span class="na">Order</span> <span class="n">o</span> <span class="o">:</span> <span class="n">pageable</span><span class="o">.</span><span class="na">getSort</span><span class="o">())</span> <span class="o">{</span>
+    <span class="n">PathBuilder</span> <span class="n">pathBuilder</span> <span class="o">=</span> <span class="k">new</span> <span class="n">PathBuilder</span><span class="o">(</span><span class="n">member</span><span class="o">.</span><span class="na">getType</span><span class="o">(),</span> <span class="n">member</span><span class="o">.</span><span class="na">getMetadata</span><span class="o">());</span>
+    <span class="n">query</span><span class="o">.</span><span class="na">orderBy</span><span class="o">(</span><span class="k">new</span> <span class="n">OrderSpecifier</span><span class="o">(</span><span class="n">o</span><span class="o">.</span><span class="na">isAscending</span><span class="o">()</span> <span class="o">?</span> <span class="n">Order</span><span class="o">.</span><span class="na">ASC</span> <span class="o">:</span> <span class="n">Order</span><span class="o">.</span><span class="na">DESC</span><span class="o">,</span> <span class="n">pathBuilder</span><span class="o">.</span><span class="na">get</span><span class="o">(</span><span class="n">o</span><span class="o">.</span><span class="na">getProperty</span><span class="o">())));</span>
+<span class="o">}</span>
+<span class="n">List</span><span class="o">&lt;</span><span class="n">Member</span><span class="o">&gt;</span> <span class="n">result</span> <span class="o">=</span> <span class="n">query</span><span class="o">.</span><span class="na">fetch</span><span class="o">();</span>
+</code></pre></div><br>
+<p><strong>참고</strong>: 정렬(<code>Sort</code>)은 조건이 조금만 복잡해져도 <code>Pageable</code> 의 <code>Sort</code> 기능을 사용하기 어렵다. <br> 루트 엔티티 범위를 넘어가는 동적 정렬 기능이 필요하면 스프링 데이터 페이징이 제공하는 <code>Sort</code> 를 사용하기 보다는 파라미터를 받아서 직접 처리하는 것을 권장한다.</p>
+</div><div class="post-footer" id="post-footer">
+    <div class="post-info">
+        <div class="post-info-line">
+            <div class="post-info-mod">
+                <span>Updated on 2022-01-01</span>
+            </div>
+            <div class="post-info-license"></div>
+        </div>
+        <div class="post-info-line">
+            <div class="post-info-md"></div>
+            <div class="post-info-share">
+                <span><a href="javascript:void(0);" title="Share on Twitter" data-sharer="twitter" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-and-querydsl/" data-title="Spring Data JPA와 QueryDSL" data-hashtags="QueryDSL"><i class="fab fa-twitter fa-fw"></i></a><a href="javascript:void(0);" title="Share on Facebook" data-sharer="facebook" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-and-querydsl/" data-hashtag="QueryDSL"><i class="fab fa-facebook-square fa-fw"></i></a><a href="javascript:void(0);" title="Share on Linkedin" data-sharer="linkedin" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-and-querydsl/"><i class="fab fa-linkedin fa-fw"></i></a><a href="javascript:void(0);" title="Share on Blogger" data-sharer="blogger" data-url="https://jaeyeonme.github.io/posts/spring-data-jpa-and-querydsl/" data-title="Spring Data JPA와 QueryDSL" data-description=""><i class="fab fa-blogger fa-fw"></i></a></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="post-info-more">
+        <section class="post-tags"><i class="fas fa-tags fa-fw"></i>&nbsp;<a href="/tags/querydsl/">QueryDSL</a></section>
+        <section>
+            <span><a href="javascript:void(0);" onclick="window.history.back();">Back</a></span>&nbsp;|&nbsp;<span><a href="/">Home</a></span>
+        </section>
+    </div>
+
+    <div class="post-nav"><a href="/posts/jpa-and-querydsl/" class="prev" rel="prev" title="JPA와 QueryDSL"><i class="fas fa-angle-left fa-fw"></i>JPA와 QueryDSL</a>
+            <a href="/posts/spring-data-jpa-with-querydsl/" class="next" rel="next" title="Spring Data JPA가 제공하는 QueryDSL">Spring Data JPA가 제공하는 QueryDSL<i class="fas fa-angle-right fa-fw"></i></a></div>
+</div>
+<div id="comments"><script src="https://utteranc.es/client.js"
+                        repo="jaeyeonme/blog_comments"
+                        issue-term="pathname"
+                        theme="preferred-color-scheme"
+                        crossorigin="anonymous"
+                        async>
+                </script><noscript>
+                Please enable JavaScript to view the comments powered by <a href="https://utteranc.es/">Utterances</a>.
+            </noscript></div></article></div>
+            </main><footer class="footer">
+        <div class="footer-container"><div class="footer-line">Powered by <a href="https://gohugo.io/" target="_blank" rel="noopener noreffer" title="Hugo 0.91.2">Hugo</a> | Theme - <a href="https://github.com/dillonzq/LoveIt" target="_blank" rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
+                </div><div class="footer-line"><i class="far fa-copyright fa-fw"></i><span itemprop="copyrightYear">2021 - 2022</span><span class="author" itemprop="copyrightHolder">&nbsp;<a href="/" target="_blank">Jaeyeon</a></span></div>
+        </div>
+    </footer></div>
+
+        <div id="fixed-buttons"><a href="#" id="back-to-top" class="fixed-button" title="Back to Top">
+                <i class="fas fa-arrow-up fa-fw"></i>
+            </a><a href="#" id="view-comments" class="fixed-button" title="View Comments">
+                <i class="fas fa-comment fa-fw"></i>
+            </a>
+        </div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/css/lightgallery.min.css"><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lightgallery.js@1.2.0/dist/js/lightgallery.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-thumbnail.js@1.2.0/dist/lg-thumbnail.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lg-zoom.js@1.2.0/dist/lg-zoom.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js"></script><script type="text/javascript">window.config={"code":{"copyTitle":"Copy to clipboard","maxShownLines":500},"comment":{"utterances":{"darkTheme":"github-dark","issueTerm":"pathname","label":"","lightTheme":"github-light","repo":"jaeyeonme/blog_comments"}},"lightGallery":{"actualSize":false,"exThumbImage":"data-thumbnail","hideBarsDelay":2000,"selector":".lightgallery","speed":400,"thumbContHeight":80,"thumbWidth":80,"thumbnail":true}};</script><script type="text/javascript" src="/js/theme.min.js"></script></body>
+</html>
